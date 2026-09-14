@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Playbook">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#101b23">
+<meta name="description" content="Learn football routes by tracing them with a finger.">
+<title>Playbook Trainer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root{
+    --turf:#2f6b46; --turf-dark:#27593b;
+    --chalk:#f1f4ee; --ink:#101b23; --ink-2:#182935; --ink-3:#25404f;
+    --line:#365467; --muted:#93a9b7;
+    --marker:#f2c230; --pass:#4fd189; --fail:#f2705e; --answer:#5fb0f0;
+    --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{
+    background:var(--ink); color:var(--chalk); font-family:var(--font);
+    font-size:15px; line-height:1.4; -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+
+  header{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
+  header .title{flex:1;min-width:0}
+  header .title b{display:block;font-size:17px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  header .title span{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tabs{display:flex;gap:3px;background:var(--ink-2);padding:3px;border-radius:9px;flex:none}
+  .tabs button{
+    border:0;background:none;color:var(--muted);font:inherit;font-weight:600;font-size:13.5px;
+    padding:6px 11px;border-radius:7px;cursor:pointer;
+  }
+  .tabs button[aria-selected="true"]{background:var(--ink-3);color:var(--chalk)}
+
+  #fieldwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px}
+  svg#field{width:100%;height:100%;touch-action:none;display:block}
+
+  #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:52vh;overflow-y:auto}
+  .banner{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .verdict{font-size:26px;font-weight:800;letter-spacing:.02em;padding:2px 14px;border-radius:8px;flex:none}
+  .verdict.pass{background:var(--pass);color:#08301c}
+  .verdict.fail{background:var(--fail);color:#3a0f08}
+  .verdict.help{background:var(--marker);color:#33270a;font-size:18px}
+  .banner .why{font-size:14.5px}
+  .banner .why small{display:block;color:var(--muted);font-size:12.5px}
+  .cue{font-size:15.5px;min-height:22px}
+  .cue b{color:var(--marker)}
+
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  button.btn{
+    flex:1 1 auto;min-width:90px;min-height:46px;font:inherit;font-size:15px;font-weight:650;
+    background:var(--ink-3);color:var(--chalk);border:1px solid var(--line);border-radius:10px;cursor:pointer;padding:0 14px;
+  }
+  button.btn:active{transform:translateY(1px)}
+  button.btn.go{background:var(--marker);color:#2a2109;border-color:var(--marker)}
+  button.btn.ghost{flex:0 0 auto;min-width:0;background:transparent}
+  button.btn.warn{color:var(--fail)}
+  button.btn:disabled{opacity:.35}
+  button.btn[aria-pressed="true"]{background:var(--marker);color:#2a2109;border-color:var(--marker)}
+  button:focus-visible{outline:2px solid var(--marker);outline-offset:2px}
+
+  .chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin:0 0 8px}
+  .chip{
+    flex:none;padding:8px 13px;border-radius:999px;background:var(--ink-3);border:1px solid var(--line);
+    font:inherit;font-size:14px;font-weight:600;color:var(--chalk);cursor:pointer;white-space:nowrap;
+  }
+  .chip[aria-pressed="true"]{background:var(--marker);color:#2a2109;border-color:var(--marker)}
+
+  h3.sec{font-size:13px;color:var(--muted);font-weight:600;margin:14px 0 7px}
+  ul.list{list-style:none;margin:0;padding:0}
+  ul.list li{
+    display:flex;align-items:center;gap:11px;padding:11px 12px;margin-bottom:6px;
+    background:var(--ink);border:1px solid transparent;border-radius:10px;cursor:pointer;
+  }
+  ul.list li[aria-current="true"]{border-color:var(--marker)}
+  ul.list .nm{flex:1;font-weight:550;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pill{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--ink-3);color:var(--muted);flex:none}
+  .pill.on{background:var(--pass);color:#08301c}
+  .pill.part{background:var(--marker);color:#2a2109}
+  .box{width:22px;height:22px;flex:none;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--ink)}
+  .box.on{background:var(--marker);border-color:var(--marker)}
+  input[type=text],textarea{
+    width:100%;padding:11px 12px;border-radius:9px;background:var(--ink);border:1px solid var(--line);
+    color:var(--chalk);font:inherit;font-size:15px;margin-bottom:8px;
+  }
+  textarea{min-height:104px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+  p.hint{color:var(--muted);font-size:13.5px;margin:6px 0}
+  input[type=range]{width:100%;accent-color:var(--marker);margin:2px 0 10px}
+  .pulse{animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.2}50%{opacity:.95}}
+  @media (prefers-reduced-motion:reduce){.pulse{animation:none;opacity:.65}}
+  @media (min-width:900px){
+    body{flex-direction:row}
+    header{position:fixed;top:0;left:0;right:404px;z-index:5;background:var(--ink)}
+    #fieldwrap{flex:1;padding-top:64px}
+    #dock{width:404px;flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title"><b id="ttl">Playbook Trainer</b><span id="sub">Load your plays, then run them with a finger.</span></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-mode="practice">Practice</button>
+    <button role="tab" data-mode="study">Study</button>
+    <button role="tab" data-mode="plays">Plays</button>
+  </div>
+</header>
+<div id="fieldwrap"><svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg></div>
+<div id="dock"></div>
+
+<script>
+/* =====================================================================
+   PLAYBOOK TRAINER
+   One file. No server, no network. Everything saves to this browser.
+   Field is 900 x 1100 px, 18 px per yard, line of scrimmage at y=880,
+   downfield is up.
+   ===================================================================== */
+
+const KEY = 'playbook.trainer.v2';
+const W = 900, H = 1100, LOS = 880, YARD = 18, R = 21;
+
+/* ---------------- helpers ---------------- */
+const $ = s => document.querySelector(s);
+const el = (t, a = {}, kids = []) => {
+  const n = document.createElement(t);
+  for (const k in a) k === 'html' ? (n.innerHTML = a[k]) : n.setAttribute(k, a[k]);
+  kids.forEach(c => n.append(c));
+  return n;
+};
+const sv = (t, a = {}) => {
+  const n = document.createElementNS('http://www.w3.org/2000/svg', t);
+  for (const k in a) n.setAttribute(k, a[k]);
+  return n;
+};
+const uid = () => Math.random().toString(36).slice(2, 9);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const clr = n => { while (n.firstChild) n.firstChild.remove(); };
+
+/* ---------------- path maths ---------------- */
+function plen(p) { let t = 0; for (let i = 1; i < p.length; i++) t += dist(p[i - 1], p[i]); return t; }
+
+function resample(pts, n) {
+  if (!pts || !pts.length) return Array.from({ length: n }, () => ({ x: 0, y: 0 }));
+  if (pts.length === 1) return Array.from({ length: n }, () => ({ ...pts[0] }));
+  const segs = []; let total = 0;
+  for (let i = 1; i < pts.length; i++) { const d = dist(pts[i - 1], pts[i]); segs.push(d); total += d; }
+  if (!total) return Array.from({ length: n }, () => ({ ...pts[0] }));
+  const out = [], step = total / (n - 1);
+  let si = 0, acc = 0;
+  for (let k = 0; k < n; k++) {
+    const tgt = step * k;
+    while (si < segs.length - 1 && acc + segs[si] < tgt) { acc += segs[si]; si++; }
+    const t = segs[si] ? (tgt - acc) / segs[si] : 0;
+    out.push({ x: pts[si].x + (pts[si + 1].x - pts[si].x) * t,
+               y: pts[si].y + (pts[si + 1].y - pts[si].y) * t });
+  }
+  return out;
+}
+
+// shortest distance from a point to a polyline, and how far along it that lands (0..1)
+function nearestOn(pt, path) {
+  let best = { d: Infinity, t: 0 };
+  const total = plen(path) || 1;
+  let acc = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i], b = path[i + 1];
+    const vx = b.x - a.x, vy = b.y - a.y, L2 = vx * vx + vy * vy, len = Math.sqrt(L2);
+    const t = L2 ? clamp(((pt.x - a.x) * vx + (pt.y - a.y) * vy) / L2, 0, 1) : 0;
+    const d = Math.hypot(pt.x - (a.x + vx * t), pt.y - (a.y + vy * t));
+    if (d < best.d) best = { d: d, t: (acc + len * t) / total };
+    acc += len;
+  }
+  return best;
+}
+
+/* --------------- grading one finger drag --------------- */
+function judge(trail, target, tol) {
+  if (!trail || trail.length < 2 || plen(trail) < 14)
+    return { pass: false, why: 'Nothing was run', progress: 0, coverage: 0, worst: 0 };
+  const marks = resample(target, 40);
+  let worst = 0;
+  for (let i = 0; i < trail.length; i++) {
+    const d = nearestOn(trail[i], target).d;
+    if (d > worst) worst = d;
+  }
+  const covered = marks.filter(s => trail.some(p => dist(p, s) <= tol * 1.15)).length;
+  const coverage = covered / marks.length;
+  const last = trail[trail.length - 1];
+  const endDev = dist(last, target[target.length - 1]);
+  const progress = clamp(nearestOn(last, target).t, 0, 1);
+  const finished = endDev <= tol * 1.25 || (progress >= 0.97 && endDev <= tol * 1.6);
+  const pass = finished && coverage >= 0.88 && worst <= tol * 2.1;
+
+  let why = 'Route run clean';
+  if (!pass) {
+    if (worst > tol * 1.6) why = 'Drifted too far off the path';
+    else if (!finished) why = progress < 0.7 ? 'Stopped short of the finish' : 'Did not quite finish it';
+    else why = 'Cut a corner on the way';
+  }
+  return { pass: pass, why: why, progress: progress, coverage: coverage, worst: worst, endDev: endDev };
+}
+
+// plain-English route description, used by the first hint
+function describe(pts, startX, isDef) {
+  const s = pts[0], e = pts[pts.length - 1];
+  const depth = Math.round((s.y - Math.min.apply(null, pts.map(p => p.y))) / YARD);
+  const drift = e.x - s.x;
+  const inward = (startX > W / 2 && drift < 0) || (startX < W / 2 && drift > 0);
+  const side = Math.abs(drift) < 1.5 * YARD ? 'straight ahead'
+             : inward ? 'in toward the middle' : 'out toward the sideline';
+  if (isDef) {
+    if (e.y > s.y + YARD) return 'Comes downhill at the ball, ' + side + '.';
+    if (depth < 2) return 'Holds his level and works ' + side + '.';
+    return 'Drops about ' + depth + ' yards, then works ' + side + '.';
+  }
+  if (depth < 2) return 'Stays shallow and runs ' + side + '.';
+  if (Math.abs(drift) < 1.5 * YARD) return 'Runs about ' + depth + ' yards straight downfield.';
+  return 'Gets about ' + depth + ' yards deep, then breaks ' + side + '.';
+}
+
+/* ---------------- sample playbook ---------------- */
+const BASE = [
+  ['LT', 350, 896, 1], ['LG', 400, 896, 1], ['C', 450, 896, 1],
+  ['RG', 500, 896, 1], ['RT', 550, 896, 1],
+  ['TE', 600, 896, 0], ['QB', 450, 968, 0], ['RB', 505, 968, 0],
+  ['X', 130, 890, 0], ['SL', 690, 896, 0], ['Z', 800, 890, 0]
+];
+function mk(name, type, notes, routes, blockers) {
+  blockers = blockers || [];
+  return { id: uid(), name: name, type: type, notes: notes, side: 'off',
+    players: BASE.map(function (b) {
+      const label = b[0];
+      return { id: label, label: label, x: b[1], y: b[2], side: 'off',
+        block: !!b[3] || blockers.indexOf(label) >= 0,
+        route: routes[label] ? routes[label].map(function (r) { return { x: r[0], y: r[1] }; }) : null };
+    }) };
+}
+// defence, lined up on the far side of the ball
+const DBASE = [
+  ['LE', 340, 858], ['DT', 410, 858], ['NT', 492, 858], ['RE', 562, 858],
+  ['W', 340, 788], ['M', 455, 782], ['S', 592, 788],
+  ['LC', 130, 816], ['RC', 800, 816], ['FS', 450, 646], ['SS', 655, 710]
+];
+const DLINE = ['LE', 'DT', 'NT', 'RE'];
+
+function mkD(name, type, notes, routes, rushers) {
+  rushers = rushers || DLINE;
+  const def = DBASE.map(function (b) {
+    const label = b[0];
+    return { id: label, label: label, x: b[1], y: b[2], side: 'def',
+      block: rushers.indexOf(label) >= 0,
+      route: routes[label] ? routes[label].map(function (r) { return { x: r[0], y: r[1] }; }) : null };
+  });
+  const scout = BASE.map(function (b) {
+    return { id: 'o' + b[0], label: b[0], x: b[1], y: b[2], side: 'off',
+      scout: true, block: false, route: null };
+  });
+  return { id: uid(), name: name, type: type, notes: notes, side: 'def',
+    players: def.concat(scout) };
+}
+
+function defenceStarters() {
+  return [
+    mkD('Cover 3 Buzz', 'Zone', 'Corners take the deep outside thirds, free safety has the middle, strong safety buzzes down.', {
+      LC: [[130, 816], [126, 700], [140, 420]],
+      RC: [[800, 816], [806, 700], [792, 420]],
+      FS: [[450, 646], [452, 420]],
+      SS: [[655, 710], [702, 792], [762, 832]],
+      W:  [[340, 788], [300, 758], [268, 742]],
+      M:  [[455, 782], [450, 698]],
+      S:  [[592, 788], [560, 722], [546, 702]]
+    }),
+    mkD('Cover 2 Zone', 'Zone', 'Safeties split the deep half each. Corners sink and sit on anything in the flat.', {
+      LC: [[130, 816], [128, 788], [162, 770]],
+      RC: [[800, 816], [802, 788], [768, 770]],
+      FS: [[450, 646], [334, 520], [302, 402]],
+      SS: [[655, 710], [620, 520], [598, 402]],
+      W:  [[340, 788], [310, 730], [300, 710]],
+      M:  [[455, 782], [452, 690], [450, 638]],
+      S:  [[592, 788], [620, 730], [630, 710]]
+    }),
+    mkD('Mike Blitz Cover 1', 'Blitz', 'Mike comes clean through the A gap. Everyone else is man to man with the free safety over the top.', {
+      M:  [[455, 782], [460, 860], [470, 940], [462, 992]],
+      FS: [[450, 646], [450, 402]],
+      LC: [[130, 816], [136, 760], [150, 602]],
+      RC: [[800, 816], [794, 760], [780, 602]],
+      SS: [[655, 710], [682, 782], [702, 852]],
+      W:  [[340, 788], [400, 850], [468, 912]],
+      S:  [[592, 788], [600, 840], [606, 882]]
+    })
+  ];
+}
+
+function starters() {
+  return [
+    mk('Slant–Flat Right', 'Pass', 'Z slants inside, slot runs to the flat. Ball comes out fast.', {
+      Z:  [[800, 890], [782, 842], [690, 750]],
+      SL: [[690, 896], [730, 940], [830, 946]],
+      X:  [[130, 890], [132, 764], [158, 792]]
+    }, ['TE', 'RB']),
+    mk('Four Verticals', 'Pass', 'Everyone runs straight downfield and stays in his own lane.', {
+      X:  [[130, 890], [142, 120]],
+      TE: [[600, 896], [470, 600], [452, 120]],
+      SL: [[690, 896], [640, 600], [634, 120]],
+      Z:  [[800, 890], [790, 120]]
+    }, ['RB']),
+    mk('Stick Right', 'Pass', 'Tight end sits down at six yards, slot clears him out to the flat.', {
+      TE: [[600, 896], [602, 788], [654, 802]],
+      SL: [[690, 896], [736, 940], [832, 944]],
+      Z:  [[800, 890], [804, 700]],
+      X:  [[130, 890], [132, 700], [104, 744]]
+    }, ['RB']),
+    mk('Power Right', 'Run', 'Back takes the handoff, presses inside, then bounces off the tight end.', {
+      RB: [[505, 968], [452, 952], [548, 910], [640, 846], [656, 700]],
+      QB: [[450, 968], [498, 978], [418, 1018]]
+    }, ['TE', 'X', 'SL', 'Z'])
+  ].concat(defenceStarters());
+}
+
+/* ---------------- state ---------------- */
+let S = boot();
+function boot() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) { saved = null; }
+  const ok = saved && Array.isArray(saved.plays) && saved.plays.length;
+  const base = ok
+    ? { plays: saved.plays, currentId: saved.currentId, stats: saved.stats || {}, tol: saved.tol || 3 }
+    : { plays: starters(), currentId: null, stats: {}, tol: 3 };
+  if (!base.currentId && base.plays[0]) base.currentId = base.plays[0].id;
+  return Object.assign({ mode: 'practice', tool: 'move', sel: null, armed: null,
+    sess: null, pane: 'list', style: 'guided', pick: null, loadMsg: '',
+    sideFilter: 'both', upSide: 'off', saveErr: '' }, base);
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(
+      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol }));
+    S.saveErr = '';
+  } catch (e) {
+    S.saveErr = 'This browser is out of room. Remove a play picture or two — once a play is traced the picture is just a reference.';
+    console.warn(e);
+  }
+}
+const cur = () => S.plays.find(p => p.id === S.currentId) || S.plays[0] || null;
+const tolPx = () => S.tol * YARD;
+const runners = play => play.players.filter(p => p.route && p.route.length > 1);
+
+/* ---------------- field ---------------- */
+const field = $('#field');
+const L = {};
+function initField() {
+  const defs = sv('defs');
+  const arrow = (id, c) => {
+    const m = sv('marker', { id: id, viewBox: '0 0 10 10', refX: 8, refY: 5,
+      markerWidth: 4.5, markerHeight: 4.5, orient: 'auto-start-reverse' });
+    m.append(sv('path', { d: 'M0,0 L10,5 L0,10 z', fill: c })); return m;
+  };
+  const tee = sv('marker', { id: 'm-tee', viewBox: '0 0 10 10', refX: 2, refY: 5,
+    markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' });
+  tee.append(sv('path', { d: 'M2,0 L2,10', stroke: '#f1f4ee', 'stroke-width': 3 }));
+  defs.append(arrow('m-ans', '#5fb0f0'), arrow('m-live', '#f2c230'), arrow('m-pass', '#4fd189'), tee);
+  field.append(defs);
+
+  const g = sv('g');
+  g.append(sv('rect', { x: 0, y: 0, width: W, height: H, fill: 'var(--turf)' }));
+  for (let y = (LOS % 180) - 180; y < H; y += 180)
+    g.append(sv('rect', { x: 0, y: y, width: W, height: 90, fill: 'var(--turf-dark)', opacity: .4 }));
+  [30, 870].forEach(x => g.append(sv('line',
+    { x1: x, y1: 0, x2: x, y2: H, stroke: '#eaf0e8', 'stroke-width': 4, opacity: .65 })));
+  for (let k = -8; k <= 48; k += 5) {
+    const y = LOS - k * YARD;
+    if (y < 14 || y > H - 6) continue;
+    if (k !== 0) g.append(sv('line',
+      { x1: 30, y1: y, x2: 870, y2: y, stroke: '#eaf0e8', 'stroke-width': 2, opacity: .3 }));
+    if (k > 0) {
+      const t = sv('text', { x: 44, y: y - 7, fill: '#eaf0e8', opacity: .5,
+        'font-size': 20, 'font-weight': 600 });
+      t.textContent = k; g.append(t);
+    }
+  }
+  for (let y = 20; y < H; y += 18)
+    [340, 560].forEach(x => g.append(sv('line',
+      { x1: x - 7, y1: y, x2: x + 7, y2: y, stroke: '#eaf0e8', 'stroke-width': 2, opacity: .25 })));
+  g.append(sv('line', { x1: 30, y1: LOS, x2: 870, y2: LOS, stroke: '#ffffff',
+    'stroke-width': 4, 'stroke-dasharray': '15 10', opacity: .9 }));
+  field.append(g);
+
+  ['photo', 'hint', 'trail', 'token', 'live'].forEach(n => { L[n] = sv('g'); field.append(L[n]); });
+}
+
+const dOf = p => p.map((q, i) => (i ? 'L' : 'M') + q.x.toFixed(1) + ',' + q.y.toFixed(1)).join(' ');
+
+function line(layer, pts, o) {
+  o = o || {};
+  if (!pts || pts.length < 2) return;
+  layer.append(sv('path', { d: dOf(pts), fill: 'none',
+    stroke: o.color || '#f2c230', 'stroke-width': o.w || 5,
+    'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    'stroke-dasharray': o.dash || 'none', opacity: o.op == null ? 1 : o.op,
+    'marker-end': o.arrow ? 'url(#' + o.arrow + ')' : 'none' }));
+}
+function blockMark(layer, p) {
+  const dir = p.y < LOS ? 1 : -1;      // defenders come downhill, blockers go upfield
+  line(layer, [{ x: p.x, y: p.y }, { x: p.x, y: p.y + dir * 40 }],
+    { color: '#f1f4ee', w: 3, op: .7, arrow: 'm-tee' });
+}
+function token(layer, p, o) {
+  o = o || {};
+  const g = sv('g', { 'data-pid': p.id });
+  let op = o.op == null ? 1 : o.op;
+  if (p.scout) op = Math.min(op, 0.4);
+  if (p.side === 'def') {
+    g.append(sv('rect', { x: p.x - R, y: p.y - R, width: R * 2, height: R * 2, rx: 5,
+      fill: o.fill || '#22394a', stroke: '#f1f4ee', 'stroke-width': 3, opacity: op }));
+  } else {
+    g.append(sv('circle', { cx: p.x, cy: p.y, r: R, fill: o.fill || '#f1f4ee',
+      stroke: o.stroke || '#101b23', 'stroke-width': 3, opacity: op }));
+  }
+  const t = sv('text', { x: p.x, y: p.y + 7, 'text-anchor': 'middle', 'font-size': 20,
+    'font-weight': 750, 'pointer-events': 'none',
+    fill: p.side === 'def' ? '#f1f4ee' : '#101b23', opacity: op });
+  t.textContent = p.label; g.append(t);
+  if (o.ring) g.append(sv('circle', { cx: p.x, cy: p.y, r: R + 11, fill: 'none',
+    stroke: o.ring, 'stroke-width': 4, 'pointer-events': 'none', class: o.pulse ? 'pulse' : '' }));
+  g.append(sv('circle', { cx: p.x, cy: p.y, r: R + 16, fill: 'transparent' })); // fat finger target
+  layer.append(g);
+}
+
+function drawPhoto(play) {
+  if (!play || !play.img || !play.imgT) return;
+  const t = play.imgT;
+  const im = sv('image', { x: t.x, y: t.y, width: t.w, height: t.h,
+    opacity: play.imgOp == null ? 0.85 : play.imgOp, preserveAspectRatio: 'none' });
+  im.setAttribute('href', play.img);
+  im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', play.img);
+  L.photo.append(im);
+}
+
+// photos get shrunk hard before storing — a playbook of full-size snaps will not fit
+function shrink(file, max, cb) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = function () {
+    const k = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k));
+    c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    let data = null;
+    try { data = c.toDataURL('image/jpeg', 0.62); } catch (e) { data = null; }
+    cb(data, c.width, c.height);
+  };
+  img.onerror = function () { URL.revokeObjectURL(url); cb(null); };
+  img.src = url;
+}
+
+// drop the picture onto the field so most of it sits over the formation
+function fitPhoto(play, iw, ih) {
+  const w = 830, h = w * (ih / iw);
+  play.imgT = { x: (W - w) / 2, y: clamp((H - h) / 2 + 90, -200, H - 80), w: w, h: h };
+  play.imgOp = 0.85;
+}
+
+/* ---------------- render ---------------- */
+function render() {
+  Object.keys(L).forEach(k => clr(L[k]));
+  document.querySelectorAll('.tabs button').forEach(b =>
+    b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
+  ({ practice: rPractice, study: rStudy, plays: rPlays })[S.mode]();
+}
+function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
+function paint(play, showRoutes) {
+  play.players.forEach(p => {
+    if (showRoutes && p.route) line(L.trail, p.route, { color: '#f2c230', arrow: 'm-live' });
+    if (showRoutes && p.block) blockMark(L.trail, p);
+  });
+  play.players.forEach(p => token(L.token, p));
+}
+
+/* ===================== PRACTICE ===================== */
+function rPractice() {
+  const d = $('#dock'); clr(d);
+  if (!S.sess) return practiceSetup(d);
+  practiceRun(d);
+}
+
+function practiceSetup(d) {
+  head('Practice', 'Pick the plays, then run each route with a finger.');
+  const play = cur();
+  if (play) paint(play, false);
+
+  if (!S.plays.length) {
+    d.append(el('p', { class: 'hint', html: 'No plays loaded. Open the Plays tab to draw one or paste a playbook in.' }));
+    const b = el('button', { class: 'btn go' }); b.textContent = 'Go to Plays';
+    b.onclick = () => { S.mode = 'plays'; render(); };
+    d.append(el('div', { class: 'bar' }, [b]));
+    return;
+  }
+
+  d.append(el('h3', { class: 'sec', html: 'Which side of the ball?' }));
+  const cs = el('div', { class: 'chips' });
+  [['both', 'Both'], ['off', 'Offense'], ['def', 'Defense']].forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.sideFilter === o[0]) });
+    c.textContent = o[1];
+    c.onclick = () => { S.sideFilter = o[0]; render(); };
+    cs.append(c);
+  });
+  d.append(cs);
+
+  const shown = visiblePlays();
+  if (!S.pick) S.pick = S.plays.map(p => p.id);
+  if (!shown.length) {
+    d.append(el('p', { class: 'hint', html: 'No ' +
+      (S.sideFilter === 'def' ? 'defensive' : 'offensive') + ' plays yet. Add one in the Plays tab.' }));
+    return;
+  }
+  d.append(el('h3', { class: 'sec', html: 'Plays in this session' }));
+  const ul = el('ul', { class: 'list' });
+  shown.forEach(p => {
+    const on = S.pick.indexOf(p.id) >= 0;
+    const st = S.stats[p.id] || {};
+    const li = el('li', {}, [
+      el('span', { class: 'box' + (on ? ' on' : ''), html: on ? '&check;' : '' }),
+      el('span', { class: 'nm', html: p.name }),
+      el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'D' : 'O' }),
+      el('span', { class: 'pill' + (st.learned ? ' on' : st.passes ? ' part' : ''),
+        html: st.learned ? 'Learned' : st.passes ? 'streak ' + (st.streak || 0) : 'New' })
+    ]);
+    li.onclick = () => {
+      S.pick = on ? S.pick.filter(id => id !== p.id) : S.pick.concat(p.id);
+      render();
+    };
+    ul.append(li);
+  });
+  d.append(ul);
+
+  d.append(el('h3', { class: 'sec', html: 'How close does he have to be?' }));
+  const c1 = el('div', { class: 'chips' });
+  [[4, 'Learning'], [3, 'Normal'], [2, 'Game speed']].forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.tol === o[0]) });
+    c.textContent = o[1] + ' \u00b7 ' + o[0] + ' yd';
+    c.onclick = () => { S.tol = o[0]; save(); render(); };
+    c1.append(c);
+  });
+  d.append(c1);
+
+  d.append(el('h3', { class: 'sec', html: 'Who gets asked' }));
+  const c2 = el('div', { class: 'chips' });
+  [['guided', 'One player at a time'], ['free', 'He picks the player']].forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.style === o[0]) });
+    c.textContent = o[1];
+    c.onclick = () => { S.style = o[0]; render(); };
+    c2.append(c);
+  });
+  d.append(c2);
+
+  const go = el('button', { class: 'btn go' });
+  go.textContent = 'Start practice';
+  go.disabled = !sessionPlays().length;
+  go.onclick = startSession;
+  d.append(el('div', { class: 'bar' }, [go]));
+}
+
+function shuffle(a) { return a.slice().sort(() => Math.random() - .5); }
+const sideOf = p => p.side === 'def' ? 'def' : 'off';
+function visiblePlays() {
+  const f = S.sideFilter || 'both';
+  return f === 'both' ? S.plays : S.plays.filter(p => sideOf(p) === f);
+}
+function sessionPlays() {
+  return visiblePlays().filter(p => (S.pick || []).indexOf(p.id) >= 0 && runners(p).length);
+}
+
+function startSession() {
+  const list = shuffle(sessionPlays());
+  S.sess = { style: S.style, order: list, i: 0, tasks: [], t: 0, done: [],
+    log: [], hint: 0, usedHint: false, result: null, trail: null,
+    active: null, flash: false, showAnswer: false };
+  loadTasks();
+  render();
+}
+function sessPlay() { return S.sess.order[S.sess.i]; }
+function loadTasks() {
+  const s = S.sess;
+  s.tasks = shuffle(runners(sessPlay()).map(p => p.id));
+  s.t = 0; s.done = []; s.hint = 0; s.usedHint = false;
+  s.result = null; s.trail = null; s.active = null; s.showAnswer = false;
+}
+function target() {
+  const s = S.sess;
+  const id = s.style === 'guided' ? s.tasks[s.t] : s.active;
+  return id ? sessPlay().players.find(p => p.id === id) : null;
+}
+
+function practiceRun(d) {
+  const s = S.sess, play = sessPlay(), tgt = target();
+  head(play.name, 'Play ' + (s.i + 1) + ' of ' + s.order.length + ' \u00b7 ' +
+    (sideOf(play) === 'def' ? 'Defense' : 'Offense') + ' \u00b7 ' + play.type);
+
+  // --- hints and answer on the field ---
+  if (tgt) {
+    if (s.hint >= 3 || s.showAnswer) {
+      line(L.hint, tgt.route, { color: '#5fb0f0', dash: '12 9', op: .9, arrow: 'm-ans' });
+    } else if (s.hint === 2 && s.flash) {
+      line(L.hint, tgt.route, { color: '#5fb0f0', dash: '12 9', op: .9, arrow: 'm-ans' });
+    } else if (s.hint === 1) {
+      line(L.hint, resample(tgt.route, 20).slice(0, 5),
+        { color: '#5fb0f0', dash: '10 8', op: .85, arrow: 'm-ans' });
+    }
+  }
+  // --- routes already completed this play ---
+  s.done.forEach(id => {
+    const p = play.players.find(x => x.id === id);
+    if (p) line(L.trail, p.route, { color: '#4fd189', op: .5, w: 4, arrow: 'm-pass' });
+  });
+  if (s.trail && tgt) paintTrail(L.trail, s.trail, tgt.route);
+
+  play.players.forEach(p => {
+    const isT = tgt && p.id === tgt.id;
+    const doneAlready = s.done.indexOf(p.id) >= 0;
+    const askable = s.tasks.indexOf(p.id) >= 0 && !doneAlready;
+    token(L.token, p, {
+      ring: isT ? '#f2c230' : doneAlready ? '#4fd189' : null,
+      pulse: isT && !s.result,
+      op: s.style === 'guided' ? (isT || doneAlready ? 1 : .45)
+                               : (askable || doneAlready ? 1 : .45)
+    });
+  });
+
+  // --- dock ---
+  if (s.result) {
+    const r = s.result;
+    const cls = r.pass ? (s.usedHint ? 'help' : 'pass') : 'fail';
+    const word = r.pass ? (s.usedHint ? 'PASS \u00b7 with help' : 'PASS') : 'FAIL';
+    d.append(el('div', { class: 'banner' }, [
+      el('span', { class: 'verdict ' + cls, html: word }),
+      el('div', { class: 'why', html: r.why +
+        '<small>Got ' + Math.round((r.progress || 0) * 100) + '% of the way \u00b7 furthest off by ' +
+        (r.worst / YARD).toFixed(1) + ' yd</small>' })
+    ]));
+  } else {
+    const left = s.tasks.length - s.done.length;
+    const job = sideOf(play) === 'def' ? 'assignment' : 'route';
+    const cue = s.style === 'guided'
+      ? 'Put a finger on <b>' + (tgt ? tgt.label : '?') + '</b> and drag him through his ' + job + '.'
+      : left + ' left. Press the player you want, then drag him through his ' + job + '.';
+    d.append(el('div', { class: 'cue', html: cue }));
+    if (s.hint >= 1 && tgt) d.append(el('p', { class: 'hint',
+      html: describe(tgt.route, tgt.x, tgt.side === 'def') }));
+  }
+
+  const bar = el('div', { class: 'bar' });
+  if (!s.result) {
+    const h = el('button', { class: 'btn' });
+    h.textContent = ['Hint', 'Show the shape', 'Leave it up', 'Route is up'][Math.min(s.hint, 3)];
+    h.disabled = s.hint >= 3 || !tgt;
+    h.onclick = useHint;
+    const sk = el('button', { class: 'btn ghost' }); sk.textContent = 'Skip';
+    sk.onclick = () => {
+      s.usedHint = true; s.showAnswer = true;
+      s.result = { pass: false, why: 'Skipped this one', coverage: 0, worst: 0 };
+      render();
+    };
+    bar.append(h, sk);
+  } else {
+    const again = el('button', { class: 'btn' }); again.textContent = 'Run it again';
+    again.onclick = () => { s.result = null; s.trail = null; s.showAnswer = false; render(); };
+    const next = el('button', { class: 'btn go' });
+    next.textContent = lastStep() ? 'Finish' : 'Next';
+    next.onclick = advance;
+    bar.append(again, next);
+  }
+  const quit = el('button', { class: 'btn ghost warn' }); quit.textContent = 'End';
+  quit.onclick = () => { S.sess = null; render(); };
+  bar.append(quit);
+  d.append(bar);
+
+  if (s.log.length) {
+    const passed = s.log.filter(x => x.pass && !x.hint).length;
+    d.append(el('p', { class: 'hint',
+      html: passed + ' clean out of ' + s.log.length + ' so far.' }));
+  }
+}
+
+// draws the finger trail green where it is on the route, red where it is not
+function paintTrail(layer, trail, route) {
+  const tol = tolPx();
+  let run = [trail[0]], good = nearestOn(trail[0], route).d <= tol;
+  const flush = () => line(layer, run, { color: good ? '#4fd189' : '#f2705e', w: 6, op: .95 });
+  for (let i = 1; i < trail.length; i++) {
+    const g = nearestOn(trail[i], route).d <= tol;
+    run.push(trail[i]);
+    if (g !== good) { flush(); run = [trail[i]]; good = g; }
+  }
+  flush();
+}
+
+function useHint() {
+  const s = S.sess;
+  s.hint = Math.min(3, s.hint + 1);
+  s.usedHint = true;
+  if (s.hint === 2) {
+    s.flash = true; render();
+    setTimeout(() => { if (S.sess === s) { s.flash = false; render(); } }, 1600);
+    return;
+  }
+  render();
+}
+
+function lastStep() {
+  const s = S.sess;
+  const moreHere = s.style === 'guided'
+    ? s.t < s.tasks.length - 1
+    : s.done.length < s.tasks.length - 1;
+  return !moreHere && s.i >= s.order.length - 1;
+}
+
+function advance() {
+  const s = S.sess, tgt = target();
+  if (tgt && s.result) {
+    s.log.push({ play: sessPlay().id, who: tgt.id, pass: s.result.pass, hint: s.usedHint });
+    if (s.done.indexOf(tgt.id) < 0) s.done.push(tgt.id);
+  }
+  s.result = null; s.trail = null; s.hint = 0; s.usedHint = false;
+  s.showAnswer = false; s.active = null;
+
+  if (s.style === 'guided' && s.t < s.tasks.length - 1) { s.t++; render(); return; }
+  if (s.style === 'free' && s.done.length < s.tasks.length) { render(); return; }
+
+  scorePlay(sessPlay().id);
+  if (s.i >= s.order.length - 1) return finish();
+  s.i++; loadTasks(); render();
+}
+
+function scorePlay(playId) {
+  const mine = S.sess.log.filter(x => x.play === playId);
+  const clean = mine.length > 0 && mine.every(x => x.pass && !x.hint);
+  const st = S.stats[playId] || { reps: 0, passes: 0, streak: 0, learned: false };
+  st.reps++;
+  if (clean) { st.passes++; st.streak++; if (st.streak >= 3) st.learned = true; }
+  else { st.streak = 0; st.learned = false; }
+  S.stats[playId] = st; save();
+}
+
+function finish() {
+  const log = S.sess.log.slice();
+  S.sess = null;
+  render();
+  const d = $('#dock'); clr(d);
+  const clean = log.filter(x => x.pass && !x.hint).length;
+  const pct = Math.round(clean / (log.length || 1) * 100);
+  head('Session done', clean + ' of ' + log.length + ' clean');
+  d.append(el('div', { class: 'banner' }, [
+    el('span', { class: 'verdict ' + (pct >= 80 ? 'pass' : pct >= 50 ? 'help' : 'fail'), html: pct + '%' }),
+    el('div', { class: 'why', html: clean + ' routes run clean<small>' +
+      (log.length - clean) + ' needed a hint or another go</small>' })
+  ]));
+  const weak = {};
+  log.filter(x => !x.pass || x.hint).forEach(x => {
+    const p = S.plays.find(y => y.id === x.play);
+    const nm = p ? p.name : 'Unknown play';
+    if (!weak[nm]) weak[nm] = [];
+    if (weak[nm].indexOf(x.who) < 0) weak[nm].push(x.who);
+  });
+  const names = Object.keys(weak);
+  if (names.length) {
+    d.append(el('h3', { class: 'sec', html: 'Work on these' }));
+    const ul = el('ul', { class: 'list' });
+    names.forEach(nm => ul.append(el('li', {}, [
+      el('span', { class: 'nm', html: nm }),
+      el('span', { class: 'pill', html: weak[nm].join(' ') })
+    ])));
+    d.append(ul);
+  }
+  const again = el('button', { class: 'btn go' }); again.textContent = 'Practise again';
+  again.onclick = () => { S.sess = null; render(); };
+  d.append(el('div', { class: 'bar' }, [again]));
+}
+
+/* ===================== STUDY ===================== */
+let anim = null;
+function rStudy() {
+  const d = $('#dock'); clr(d);
+  const play = cur();
+  head(play ? play.name : 'Study', play ? (play.notes || play.type) : 'Nothing loaded');
+  if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
+
+  const chips = el('div', { class: 'chips' });
+  S.plays.forEach(p => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
+    c.textContent = p.name;
+    c.onclick = () => { S.currentId = p.id; save(); render(); };
+    chips.append(c);
+  });
+  d.append(chips);
+  if (play.img && S.peek) drawPhoto(play);
+  paint(play, true);
+
+  const bar = el('div', { class: 'bar' });
+  if (play.img) {
+    const pk = el('button', { class: 'btn', 'aria-pressed': String(!!S.peek) });
+    pk.textContent = S.peek ? 'Hide the card' : 'Show the card';
+    pk.onclick = () => { S.peek = !S.peek; render(); };
+    bar.append(pk);
+  }
+  const run = el('button', { class: 'btn go' }); run.textContent = 'Run the play';
+  run.onclick = () => animate(play);
+  const flip = el('button', { class: 'btn' }); flip.textContent = 'Flip sides';
+  flip.onclick = () => { flipPlay(play); save(); render(); };
+  bar.append(run, flip);
+  d.append(bar);
+
+  const st = S.stats[play.id];
+  d.append(el('p', { class: 'hint', html: st
+    ? 'Practised ' + st.reps + ' time' + (st.reps === 1 ? '' : 's') + '. ' +
+      (st.learned ? 'Marked learned.' : 'Clean streak ' + (st.streak || 0) + ' of 3.')
+    : 'Not practised yet.' }));
+  if (play.notes) d.append(el('p', { class: 'hint', html: play.notes }));
+}
+
+function animate(play) {
+  if (anim) cancelAnimationFrame(anim);
+  const movers = runners(play).map(p => ({ p: p, pts: resample(p.route, 70) }));
+  const t0 = performance.now(), dur = 2400;
+  const step = now => {
+    const t = clamp((now - t0) / dur, 0, 1);
+    clr(L.trail); clr(L.token);
+    play.players.forEach(p => { if (p.block) blockMark(L.trail, p); });
+    movers.forEach(m => {
+      const n = Math.max(2, Math.round(t * (m.pts.length - 1)) + 1);
+      line(L.trail, m.pts.slice(0, n), { color: '#f2c230', arrow: t >= 1 ? 'm-live' : null });
+    });
+    play.players.forEach(p => {
+      const m = movers.find(q => q.p.id === p.id);
+      const at = m ? m.pts[Math.round(t * (m.pts.length - 1))] : p;
+      token(L.token, Object.assign({}, p, { x: at.x, y: at.y }));
+    });
+    anim = t < 1 ? requestAnimationFrame(step) : null;
+  };
+  anim = requestAnimationFrame(step);
+}
+
+function flipPlay(play) {
+  play.players.forEach(p => {
+    p.x = W - p.x;
+    if (p.route) p.route = p.route.map(q => ({ x: W - q.x, y: q.y }));
+  });
+}
+
+/* ============ typing routes in shorthand: "Z slant", "X out 12" ============ */
+const ALIAS = { fly: 'go', streak: 'go', vert: 'go', dig: 'in', cross: 'drag',
+  shallow: 'drag', stick: 'hitch', arrow: 'flat', swing: 'flat', sit: 'hitch',
+  blitz: 'rush', thirds: 'third', halves: 'half', mid: 'middle',
+  buzz: 'flatzone', curlflat: 'flatzone', deep: 'third' };
+const DEPTHS = { go: 20, seam: 18, fade: 18, slant: 3, flat: 1, out: 8, in: 10,
+  hitch: 6, curl: 10, comeback: 12, post: 12, corner: 12, drag: 3, wheel: 8, screen: 0,
+  rush: 4, contain: 5, hook: 7, third: 14, half: 12, middle: 14, flatzone: 4, spy: 2 };
+const DEF_WORDS = ['rush', 'blitz', 'contain', 'spy', 'hook', 'flatzone', 'third', 'half', 'middle'];
+const ROUTE_WORDS = Object.keys(DEPTHS).concat(Object.keys(ALIAS)).concat(['block']);
+
+function buildRoute(p, name, depth) {
+  const Y = YARD, o = p.x >= W / 2 ? 1 : -1, i = -o;
+  const D = depth || DEPTHS[name] || 8;
+  const P = (dx, dy) => ({ x: clamp(p.x + dx * Y, 45, 855), y: p.y - dy * Y });
+  switch (name) {
+    case 'go':       return [P(0, 0), P(o * 0.5, D)];
+    case 'seam':     return [P(0, 0), P(i * 1, D * 0.5), P(i * 1.5, D)];
+    case 'fade':     return [P(0, 0), P(o * 1.5, D * 0.4), P(o * 3, D)];
+    case 'slant':    return [P(0, 0), P(i * 1, 2), P(i * 8, 9)];
+    case 'flat':     return [P(0, 0), P(o * 3, -1), P(o * 9, -0.5)];
+    case 'out':      return [P(0, 0), P(0, D), P(o * 7, D - 1)];
+    case 'in':       return [P(0, 0), P(0, D), P(i * 9, D + 0.5)];
+    case 'hitch':    return [P(0, 0), P(0, D), P(i * 1.5, D - 2)];
+    case 'curl':     return [P(0, 0), P(0, D), P(i * 2, D - 2.5)];
+    case 'comeback': return [P(0, 0), P(0, D), P(o * 2.5, D - 3)];
+    case 'post':     return [P(0, 0), P(0, D), P(i * 10, D + 11)];
+    case 'corner':   return [P(0, 0), P(0, D), P(o * 9, D + 9)];
+    case 'drag':     return [P(0, 0), P(i * 2, 2), P(i * 16, 4)];
+    case 'wheel':    return [P(0, 0), P(o * 4, -1), P(o * 7, 3), P(o * 7.5, D + 4)];
+    case 'screen':   return [P(0, 0), P(o * 5, -2), P(o * 10, -1)];
+    // defence: positive depth means dropping away from the ball, negative means downhill
+    case 'rush':     return [P(0, 0), P(o * 0.4, -D)];
+    case 'contain':  return [P(0, 0), P(o * 2, -2), P(o * 3.2, -D)];
+    case 'spy':      return [P(0, 0), P(i * 1.5, -1), P(o * 1.5, -1.5)];
+    case 'hook':     return [P(0, 0), P(i * 0.4, D * 0.6), P(i * 1, D)];
+    case 'flatzone': return [P(0, 0), P(o * 2, -2), P(o * 5.5, -4)];
+    case 'third':    return [P(0, 0), P(o * 0.5, D * 0.4), P(o * 1.5, D)];
+    case 'half':     return [P(0, 0), P(i * 3, D * 0.5), P(i * 5.5, D)];
+    case 'middle':   return [P(0, 0), P(0, D * 0.4), P(0, D)];
+    default: return null;
+  }
+}
+
+// reads lines like "Z slant", "X: out 12", "TE block". First line can be the play name.
+function applySheet(text, play) {
+  const lines = String(text).split('\n').map(l => l.trim()).filter(Boolean);
+  let done = 0; const skipped = [];
+  lines.forEach((ln, idx) => {
+    const m = ln.match(/^([A-Za-z][A-Za-z0-9]{0,3})\s*[:\-]?\s+([A-Za-z]+)\s*(\d+)?$/);
+    const who = m ? play.players.find(q => !q.scout && q.label.toLowerCase() === m[1].toLowerCase()) : null;
+    let word = m ? m[2].toLowerCase() : '';
+    if (ALIAS[word]) word = ALIAS[word];
+    if (!m || !who || ROUTE_WORDS.indexOf(m[2].toLowerCase()) < 0) {
+      if (idx === 0 && !who) { play.name = ln; return; }
+      skipped.push(ln); return;
+    }
+    if (word === 'block') { who.block = true; who.route = null; done++; return; }
+    const r = buildRoute(who, word, m[3] ? +m[3] : 0);
+    if (!r) { skipped.push(ln); return; }
+    who.route = r; who.block = false; done++;
+  });
+  return { done: done, skipped: skipped };
+}
+
+/* ===================== PLAYS: load and build ===================== */
+const OFF = ['QB', 'RB', 'FB', 'WR', 'TE', 'C', 'LG', 'RG', 'LT', 'RT'];
+const DEF = ['LE', 'DT', 'NT', 'RE', 'W', 'M', 'S', 'LC', 'RC', 'FS', 'SS', 'NB'];
+
+function rPlays() {
+  const d = $('#dock'); clr(d);
+  const play = cur();
+  head('Plays', ({ list: 'Draw and edit plays', upload: 'Upload pictures of your plays',
+    type: 'Type routes in shorthand', load: 'Backup and transfer' })[S.pane]);
+
+  const chips = el('div', { class: 'chips' });
+  [['list', 'Edit'], ['upload', 'Upload'], ['type', 'Type in'], ['load', 'Backup']].forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.pane === o[0]) });
+    c.textContent = o[1];
+    c.onclick = () => { S.pane = o[0]; S.loadMsg = ''; render(); };
+    chips.append(c);
+  });
+  d.append(chips);
+  if (S.saveErr) d.append(el('p', { class: 'hint', html: S.saveErr }));
+  if (S.pane !== 'list' && play) { drawPhoto(play); paint(play, true); }
+  if (S.pane === 'load')   return paneLoad(d);
+  if (S.pane === 'upload') return paneUpload(d);
+  if (S.pane === 'type')   return paneType(d);
+
+  const ul = el('ul', { class: 'list' });
+  S.plays.forEach(p => {
+    const li = el('li', { 'aria-current': String(p.id === S.currentId) }, [
+      el('span', { class: 'nm', html: p.name }),
+      el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'Defense' : 'Offense' }),
+      el('span', { class: 'pill', html: runners(p).length })
+    ]);
+    li.onclick = () => { S.currentId = p.id; S.sel = null; save(); render(); };
+    ul.append(li);
+  });
+  d.append(ul);
+
+  const bar0 = el('div', { class: 'bar' });
+  const add = el('button', { class: 'btn go' }); add.textContent = 'New offense play';
+  add.onclick = () => {
+    const p = mk('New offense play', 'Pass', '', {});
+    S.plays.push(p); S.currentId = p.id; S.sel = null; save(); render();
+  };
+  const addD = el('button', { class: 'btn go' }); addD.textContent = 'New defense play';
+  addD.onclick = () => {
+    const p = mkD('New defense call', 'Zone', '', {});
+    S.plays.push(p); S.currentId = p.id; S.sel = null; save(); render();
+  };
+  bar0.append(addD);
+  const dup = el('button', { class: 'btn' }); dup.textContent = 'Duplicate';
+  dup.disabled = !play;
+  dup.onclick = () => {
+    const c = JSON.parse(JSON.stringify(play));
+    c.id = uid(); c.name = play.name + ' copy';
+    S.plays.push(c); S.currentId = c.id; save(); render();
+  };
+  bar0.append(add, dup);
+  d.append(bar0);
+
+  if (!play) return;
+  drawPhoto(play);
+  paint(play, true);
+  if (S.sel) {
+    const p = play.players.find(x => x.id === S.sel);
+    if (p) token(L.live, p, { ring: '#f2c230' });
+  }
+
+  d.append(el('h3', { class: 'sec', html: 'Side of the ball' }));
+  const sides = el('div', { class: 'chips' });
+  [['off', 'Offense'], ['def', 'Defense']].forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(sideOf(play) === o[0]) });
+    c.textContent = o[1];
+    c.onclick = () => { play.side = o[0]; save(); render(); };
+    sides.append(c);
+  });
+  d.append(sides);
+
+  d.append(el('h3', { class: 'sec', html: 'Name and note' }));
+  const nm = el('input', { type: 'text', value: play.name });
+  nm.oninput = () => { play.name = nm.value; save(); };
+  const nt = el('input', { type: 'text', value: play.notes || '',
+    placeholder: 'What should he remember about this play?' });
+  nt.oninput = () => { play.notes = nt.value; save(); };
+  d.append(nm, nt);
+
+  d.append(el('h3', { class: 'sec', html: 'Tool' }));
+  const tools = el('div', { class: 'chips' });
+  const toolSet = [['move', 'Move'], ['route', 'Draw route'], ['add', 'Add player']];
+  if (play.img) toolSet.push(['photo', 'Line up picture']);
+  toolSet.forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.tool === o[0]) });
+    c.textContent = o[1];
+    c.onclick = () => { S.tool = o[0]; S.armed = null; render(); };
+    tools.append(c);
+  });
+  d.append(tools);
+  d.append(el('p', { class: 'hint', html: ({
+    move: 'Drag players to line them up.',
+    route: 'Press a player and drag the path he runs. Let go to keep it.',
+    add: 'Pick a position below, then tap the field.',
+    photo: 'Drag the picture to line it up. Pinch to resize, or use the buttons.'
+  })[S.tool] || '' }));
+
+  if (play.img && S.tool === 'photo') {
+    const b = el('div', { class: 'bar' });
+    const bigger = el('button', { class: 'btn' }); bigger.textContent = 'Bigger';
+    bigger.onclick = () => { scalePhoto(play, 1.12); save(); render(); };
+    const smaller = el('button', { class: 'btn' }); smaller.textContent = 'Smaller';
+    smaller.onclick = () => { scalePhoto(play, 1 / 1.12); save(); render(); };
+    b.append(bigger, smaller);
+    d.append(b);
+    const lab = el('p', { class: 'hint', html: 'Picture fade' });
+    const rng = el('input', { type: 'range', min: '0.15', max: '1', step: '0.05',
+      value: String(play.imgOp == null ? 0.85 : play.imgOp) });
+    rng.style.width = '100%';
+    rng.oninput = () => { play.imgOp = +rng.value; save(); render(); };
+    d.append(lab, rng);
+  }
+  if (play.img) {
+    const rm = el('button', { class: 'btn warn' }); rm.textContent = 'Remove the picture';
+    rm.onclick = () => {
+      delete play.img; delete play.imgT; delete play.imgOp;
+      if (S.tool === 'photo') S.tool = 'move';
+      save(); render();
+    };
+    d.append(el('div', { class: 'bar' }, [rm]));
+  }
+
+  if (S.tool === 'add') {
+    const g = el('div', { class: 'chips' });
+    OFF.concat(DEF).forEach(lbl => {
+      const c = el('button', { class: 'chip',
+        'aria-pressed': String(!!S.armed && S.armed.label === lbl) });
+      c.textContent = lbl;
+      c.onclick = () => { S.armed = { label: lbl, side: DEF.indexOf(lbl) >= 0 ? 'def' : 'off' }; render(); };
+      g.append(c);
+    });
+    d.append(g);
+  }
+
+  if (S.sel) {
+    const p = play.players.find(x => x.id === S.sel);
+    if (p) {
+      d.append(el('h3', { class: 'sec', html: 'Selected: ' + p.label }));
+      const b = el('div', { class: 'bar' });
+      const blk = el('button', { class: 'btn', 'aria-pressed': String(!!p.block) });
+      blk.textContent = 'Blocks';
+      blk.onclick = () => { p.block = !p.block; if (p.block) p.route = null; save(); render(); };
+      const cr = el('button', { class: 'btn' }); cr.textContent = 'Clear route';
+      cr.onclick = () => { p.route = null; save(); render(); };
+      const rm = el('button', { class: 'btn warn' }); rm.textContent = 'Remove';
+      rm.onclick = () => {
+        play.players = play.players.filter(x => x.id !== p.id);
+        S.sel = null; save(); render();
+      };
+      b.append(blk, cr, rm);
+      d.append(b);
+    }
+  }
+
+  const del = el('button', { class: 'btn warn' }); del.textContent = 'Delete this play';
+  del.onclick = () => {
+    S.plays = S.plays.filter(p => p.id !== play.id);
+    S.currentId = S.plays[0] ? S.plays[0].id : null;
+    S.sel = null; save(); render();
+  };
+  d.append(el('div', { class: 'bar' }, [del]));
+}
+
+function scalePhoto(play, k) {
+  const t = play.imgT;
+  const cx = t.x + t.w / 2, cy = t.y + t.h / 2;
+  t.w *= k; t.h *= k;
+  t.x = cx - t.w / 2; t.y = cy - t.h / 2;
+}
+
+function paneUpload(d) {
+  d.append(el('p', { class: 'hint', html:
+    'Take a photo of each play card, or screenshot a page of the playbook. Each picture becomes a play you trace over: line the picture up, drag the players onto their spots, then drag each route.' }));
+
+  d.append(el('h3', { class: 'sec', html: 'These pictures are' }));
+  const cs = el('div', { class: 'chips' });
+  [['off', 'Offense plays'], ['def', 'Defense calls']].forEach(o => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String((S.upSide || 'off') === o[0]) });
+    c.textContent = o[1];
+    c.onclick = () => { S.upSide = o[0]; render(); };
+    cs.append(c);
+  });
+  d.append(cs);
+
+  const b = el('div', { class: 'bar' });
+  const up = el('button', { class: 'btn go' }); up.textContent = 'Choose pictures';
+  up.onclick = pickImages;
+  b.append(up);
+  d.append(b);
+  if (S.uploadMsg) d.append(el('p', { class: 'hint', html: S.uploadMsg }));
+
+  const untraced = S.plays.filter(q => q.img && !runners(q).length);
+  if (untraced.length) {
+    d.append(el('h3', { class: 'sec', html: 'Waiting to be traced' }));
+    const ul = el('ul', { class: 'list' });
+    untraced.forEach(q => {
+      const li = el('li', {}, [
+        el('span', { class: 'nm', html: q.name }),
+        el('span', { class: 'pill', html: 'no routes yet' })
+      ]);
+      li.onclick = () => { S.currentId = q.id; S.pane = 'list'; S.tool = 'photo'; S.sel = null; save(); render(); };
+      ul.append(li);
+    });
+    d.append(ul);
+  }
+
+  d.append(el('h3', { class: 'sec', html: 'How to trace one' }));
+  d.append(el('p', { class: 'hint', html:
+    '1. Line up picture — drag and pinch until the line of scrimmage on the card sits on the dashed line.<br>' +
+    '2. Move — drag each player onto his spot on the card. Add or remove players as needed.<br>' +
+    '3. Draw route — press a player and drag along the line on the card.<br>' +
+    '4. Fade the picture down to check your work, then remove it.' }));
+}
+
+function pickImages() {
+  const i = el('input', { type: 'file', accept: 'image/*', multiple: 'multiple' });
+  i.onchange = () => {
+    const files = Array.prototype.slice.call(i.files || []);
+    if (!files.length) return;
+    let made = 0, failed = 0, pending = files.length, first = null;
+    S.uploadMsg = 'Reading ' + files.length + ' picture' + (files.length === 1 ? '' : 's') + '…';
+    render();
+    files.forEach(f => {
+      shrink(f, 1000, (data, iw, ih) => {
+        if (data) {
+          const play = S.upSide === 'def'
+            ? mkD(cleanName(f.name), 'Zone', '', {}, [])
+            : mk(cleanName(f.name), 'Pass', '', {});
+          play.players.forEach(q => { q.block = false; });
+          play.img = data;
+          fitPhoto(play, iw, ih);
+          S.plays.push(play);
+          if (!first) first = play.id;
+          made++;
+        } else failed++;
+        if (--pending === 0) {
+          if (first) { S.currentId = first; }
+          S.uploadMsg = made
+            ? 'Added ' + made + ' play' + (made === 1 ? '' : 's') +
+              (failed ? '. ' + failed + ' picture' + (failed === 1 ? '' : 's') +
+                ' could not be read — if they are iPhone HEIC files, screenshot them and try the screenshots.' : '.') +
+              ' Open one below to start tracing.'
+            : 'None of those could be read. Try a JPEG or PNG, or screenshot the page.';
+          save(); render();
+        }
+      });
+    });
+  };
+  i.click();
+}
+
+function cleanName(fn) {
+  return String(fn).replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ').trim().slice(0, 40) || 'Untitled play';
+}
+
+function paneType(d) {
+  const play = cur();
+  const isDef = play && sideOf(play) === 'def';
+  d.append(el('p', { class: 'hint', html:
+    'One player per line: his label, then the job. Add a number for the depth in yards.<br>' +
+    (isDef
+      ? 'Defense: rush, blitz, contain, spy, hook, flatzone, third, half, middle, block. Positive depth drops away from the ball.'
+      : 'Offense: go, seam, fade, slant, flat, out, in, hitch, curl, comeback, post, corner, drag, wheel, screen, block.') }));
+  const ta = el('textarea', { placeholder: isDef
+    ? 'Cover 3 Buzz\nLC third\nRC third\nFS middle\nSS flatzone\nM hook 5\nLE rush'
+    : 'Stick Right\nTE hitch 6\nSL flat\nZ go\nX comeback 12\nRB block' });
+  ta.style.minHeight = '150px';
+  d.append(ta);
+  const b = el('div', { class: 'bar' });
+  const mkNew = el('button', { class: 'btn go' }); mkNew.textContent = 'Make a new play';
+  mkNew.textContent = isDef ? 'Make a new defense call' : 'Make a new offense play';
+  mkNew.onclick = () => {
+    const np = isDef ? mkD('Typed call', 'Zone', '', {}) : mk('Typed play', 'Pass', '', {});
+    if (!isDef) np.players.forEach(q => { q.block = ['LT', 'LG', 'C', 'RG', 'RT'].indexOf(q.id) >= 0; });
+    const res = applySheet(ta.value, np);
+    if (!res.done) { S.typeMsg = 'Nothing recognised. Check the labels match the players on the field.'; render(); return; }
+    S.plays.push(np); S.currentId = np.id; S.pane = 'list'; S.tool = 'move';
+    S.typeMsg = report(res); save(); render();
+  };
+  const onCur = el('button', { class: 'btn' }); onCur.textContent = 'Apply to current play';
+  onCur.disabled = !play;
+  onCur.onclick = () => {
+    const res = applySheet(ta.value, play);
+    S.typeMsg = report(res); save(); render();
+  };
+  b.append(mkNew, onCur);
+  d.append(b);
+  if (S.typeMsg) d.append(el('p', { class: 'hint', html: S.typeMsg }));
+  d.append(el('p', { class: 'hint', html:
+    'Routes are drawn from where each player is standing, so line the formation up first in Edit. Every route can still be redrawn by hand afterwards.' }));
+}
+
+function report(res) {
+  let m = 'Set ' + res.done + ' route' + (res.done === 1 ? '' : 's') + '.';
+  if (res.skipped.length) m += ' Not recognised: ' + res.skipped.slice(0, 4).join(', ') + '.';
+  return m;
+}
+
+function paneLoad(d) {
+  d.append(el('h3', { class: 'sec', html: 'Playbook file' }));
+  const b1 = el('div', { class: 'bar' });
+  const imp = el('button', { class: 'btn go' }); imp.textContent = 'Open a playbook';
+  imp.onclick = pickFile;
+  const exp = el('button', { class: 'btn' }); exp.textContent = 'Save a copy';
+  exp.onclick = exportFile;
+  b1.append(imp, exp);
+  d.append(b1);
+  d.append(el('p', { class: 'hint',
+    html: 'Saves playbook.json. Email it to his phone and open it there to move the whole playbook across.' }));
+
+  d.append(el('h3', { class: 'sec', html: 'Paste a playbook' }));
+  const ta = el('textarea', { placeholder: '{"plays":[{"name":"Slant Right","players":[...]}]}' });
+  d.append(ta);
+  const b2 = el('div', { class: 'bar' });
+  const a1 = el('button', { class: 'btn go' }); a1.textContent = 'Add these plays';
+  a1.onclick = () => ingest(ta.value, false);
+  const a2 = el('button', { class: 'btn' }); a2.textContent = 'Replace everything';
+  a2.onclick = () => ingest(ta.value, true);
+  b2.append(a1, a2);
+  d.append(b2);
+  if (S.loadMsg) d.append(el('p', { class: 'hint', html: S.loadMsg }));
+
+  d.append(el('h3', { class: 'sec', html: 'Start over' }));
+  const rs = el('button', { class: 'btn warn' }); rs.textContent = 'Reset to the four sample plays';
+  rs.onclick = () => {
+    S.plays = starters(); S.stats = {}; S.pick = null;
+    S.currentId = S.plays[0].id; S.loadMsg = 'Back to the samples.';
+    save(); render();
+  };
+  d.append(el('div', { class: 'bar' }, [rs]));
+}
+
+// accepts the v1 landscape format as well as the current one
+function normalise(raw) {
+  const list = Array.isArray(raw) ? raw : raw.plays;
+  if (!Array.isArray(list) || !list.length) throw new Error('no plays');
+  let maxY = 0;
+  list.forEach(p => (p.players || []).forEach(q => {
+    if (+q.y > maxY) maxY = +q.y;
+    (q.route || []).forEach(r => {
+      const ry = +(r.y !== undefined ? r.y : r[1]);
+      if (ry > maxY) maxY = ry;
+    });
+  }));
+  const legacy = maxY > 0 && maxY < 760;   // old landscape format
+  return list.map(p => {
+    if (!Array.isArray(p.players) || !p.players.length) throw new Error('a play has no players');
+    const out = {
+      id: uid(),
+      name: String(p.name || 'Untitled'),
+      type: p.type || 'Pass',
+      notes: p.notes || '',
+      side: p.side === 'def' ? 'def' : 'off',
+      img: typeof p.img === 'string' && p.img.slice(0, 5) === 'data:' ? p.img : undefined,
+      imgT: p.imgT && isFinite(+p.imgT.w) ? { x: +p.imgT.x, y: +p.imgT.y, w: +p.imgT.w, h: +p.imgT.h } : undefined,
+      imgOp: isFinite(+p.imgOp) ? +p.imgOp : undefined,
+      players: p.players.map(q => {
+        const rt = Array.isArray(q.route) && q.route.length > 1
+          ? q.route.map(r => ({ x: +(r.x !== undefined ? r.x : r[0]), y: +(r.y !== undefined ? r.y : r[1]) }))
+          : null;
+        return { id: String(q.id || q.label || uid()), label: String(q.label || q.id || '?'),
+          x: +q.x, y: +q.y, side: q.side === 'def' ? 'def' : 'off',
+          scout: !!q.scout, block: !!q.block, route: rt };
+      })
+    };
+    if (legacy) {
+      const conv = v => ({ x: (v.x - 500) * 0.9 + 450, y: 880 + (v.y - 450) * 0.9 });
+      out.players.forEach(q => {
+        const c = conv(q); q.x = c.x; q.y = c.y;
+        if (q.route) q.route = q.route.map(conv);
+      });
+    }
+    out.players.forEach(q => {
+      if (!isFinite(q.x) || !isFinite(q.y)) throw new Error('bad coordinates');
+    });
+    return out;
+  });
+}
+
+function ingest(text, replace) {
+  try {
+    const plays = normalise(JSON.parse(text));
+    S.plays = replace ? plays : S.plays.concat(plays);
+    if (replace) S.stats = {};
+    S.pick = null;
+    S.currentId = S.plays[0].id;
+    S.loadMsg = 'Loaded ' + plays.length + ' play' + (plays.length === 1 ? '' : 's') + '.';
+    save(); render();
+  } catch (e) {
+    S.loadMsg = 'That did not read as a playbook. It needs a "plays" list, and each play needs "players" with x, y and an optional "route".';
+    render();
+  }
+}
+function pickFile() {
+  const i = el('input', { type: 'file', accept: '.json,application/json' });
+  i.onchange = () => {
+    const f = i.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => ingest(String(rd.result), false);
+    rd.readAsText(f);
+  };
+  i.click();
+}
+function exportFile() {
+  const blob = new Blob([JSON.stringify({ plays: S.plays, stats: S.stats }, null, 2)],
+    { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: 'playbook.json' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* ===================== finger input ===================== */
+function toField(e) {
+  const pt = field.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const m = field.getScreenCTM();
+  if (!m) return { x: 0, y: 0 };
+  const p = pt.matrixTransform(m.inverse());
+  return { x: clamp(p.x, 0, W), y: clamp(p.y, 0, H) };
+}
+let act = null;
+const pointers = new Map();   // live fingers, so the picture can be pinched
+
+field.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const pos = toField(e);
+  pointers.set(e.pointerId, pos);
+  const hit = e.target.closest('[data-pid]');
+  const pid = hit ? hit.getAttribute('data-pid') : null;
+  if (S.mode === 'plays' && S.pane === 'list' && S.tool === 'photo') return photoDown(e, pos);
+  if (S.mode === 'plays' && S.pane === 'list') return editDown(e, pos, pid);
+  if (S.mode === 'practice' && S.sess) return runDown(e, pos, pid);
+});
+
+function photoDown(e, pos) {
+  const play = cur();
+  if (!play || !play.img || !play.imgT) return;
+  try { field.setPointerCapture(e.pointerId); } catch (err) {}
+  if (pointers.size >= 2) {
+    const two = Array.from(pointers.values()).slice(0, 2);
+    act = { type: 'photo', mode: 'pinch', play: play,
+      d0: Math.max(1, dist(two[0], two[1])),
+      mid0: { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 },
+      rect0: Object.assign({}, play.imgT) };
+  } else {
+    act = { type: 'photo', mode: 'move', play: play, last: pos };
+  }
+}
+
+function photoMove() {
+  const t = act.play.imgT;
+  if (act.mode === 'pinch') {
+    const two = Array.from(pointers.values()).slice(0, 2);
+    if (two.length < 2) return;
+    const k = clamp(dist(two[0], two[1]) / act.d0, 0.15, 8);
+    const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
+    t.w = act.rect0.w * k;
+    t.h = act.rect0.h * k;
+    t.x = mid.x - (act.mid0.x - act.rect0.x) * k;
+    t.y = mid.y - (act.mid0.y - act.rect0.y) * k;
+  } else {
+    const now = pointers.values().next().value;
+    if (!now) return;
+    t.x += now.x - act.last.x;
+    t.y += now.y - act.last.y;
+    act.last = now;
+  }
+  render();
+}
+
+field.addEventListener('pointermove', e => {
+  if (!act) return;
+  const pos = toField(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, pos);
+  if (act.type === 'photo') { photoMove(); return; }
+  if (act.type === 'drag') {
+    act.p.x = pos.x + act.dx; act.p.y = pos.y + act.dy;
+    render();
+    return;
+  }
+  const last = act.pts[act.pts.length - 1];
+  if (dist(last, pos) < 7) return;
+  act.pts.push(pos);
+  clr(L.live);
+  if (act.mode === 'run') {
+    paintTrail(L.live, act.pts, act.p.route);
+    token(L.live, Object.assign({}, act.p, { x: pos.x, y: pos.y }), { stroke: '#f2c230' });
+  } else {
+    line(L.live, act.pts, { color: '#f2c230', w: 5 });
+  }
+});
+
+field.addEventListener('pointerup', e => {
+  pointers.delete(e.pointerId);
+  if (!act) return;
+  if (act.type === 'photo') { act = null; save(); render(); return; }
+  const a = act; act = null;
+  try { field.releasePointerCapture(e.pointerId); } catch (err) {}
+  clr(L.live);
+  if (a.type === 'draw') {
+    if (a.pts.length > 2) {
+      if (a.mode === 'edit') { a.p.route = thin(a.pts); a.p.block = false; }
+      else {
+        const s = S.sess;
+        s.trail = a.pts;
+        s.result = judge(a.pts, a.p.route, tolPx());
+        if (!s.result.pass) s.showAnswer = true;
+      }
+    } else if (a.mode === 'run') {
+      S.sess.trail = null; S.sess.active = null;
+    }
+  }
+  save(); render();
+});
+field.addEventListener('pointercancel', e => {
+  pointers.delete(e.pointerId);
+  act = null; clr(L.live); render();
+});
+
+function thin(pts, tol) {
+  tol = tol || 10;
+  const out = [pts[0]];
+  for (let i = 0; i < pts.length; i++)
+    if (dist(pts[i], out[out.length - 1]) > tol) out.push(pts[i]);
+  const last = pts[pts.length - 1];
+  if (dist(last, out[out.length - 1]) > 1) out.push(last);
+  return out;
+}
+
+function editDown(e, pos, pid) {
+  const play = cur(); if (!play) return;
+  if (S.tool === 'add' && S.armed) {
+    let label = S.armed.label, n = 2;
+    while (play.players.some(p => p.id === label)) label = S.armed.label + (n++);
+    play.players.push({ id: label, label: label, x: pos.x, y: pos.y,
+      side: S.armed.side, block: false, route: null });
+    S.sel = label; S.armed = null; S.tool = 'move'; save(); render();
+    return;
+  }
+  if (!pid) { S.sel = null; render(); return; }
+  const p = play.players.find(x => x.id === pid);
+  if (!p) return;
+  S.sel = pid;
+  act = S.tool === 'route'
+    ? { type: 'draw', mode: 'edit', p: p, pts: [{ x: p.x, y: p.y }] }
+    : { type: 'drag', p: p, dx: p.x - pos.x, dy: p.y - pos.y };
+  try { field.setPointerCapture(e.pointerId); } catch (err) {}
+  render();
+}
+
+function runDown(e, pos, pid) {
+  const s = S.sess, play = sessPlay();
+  if (s.result) return;
+  let p;
+  if (s.style === 'guided') {
+    p = play.players.find(x => x.id === s.tasks[s.t]);
+    if (!p) return;
+    if (pid !== p.id && dist(pos, p) > R + 24) { bump('Start on the highlighted player.'); return; }
+  } else {
+    if (!pid) return;
+    p = play.players.find(x => x.id === pid);
+    if (!p) return;
+    if (s.done.indexOf(pid) >= 0) { bump(p.label + ' is already done.'); return; }
+    if (s.tasks.indexOf(pid) < 0) {
+      bump(p.scout ? 'That is the offense. Pick a defender.'
+                   : p.label + ' has no assignment here — he rushes or blocks.');
+      return;
+    }
+    s.active = pid;
+  }
+  act = { type: 'draw', mode: 'run', p: p, pts: [{ x: p.x, y: p.y }] };
+  try { field.setPointerCapture(e.pointerId); } catch (err) {}
+  render();
+}
+
+function bump(msg) {
+  const c = $('#dock').querySelector('.cue');
+  if (c) c.innerHTML = msg;
+}
+
+/* ===================== boot ===================== */
+document.querySelectorAll('.tabs button').forEach(b => {
+  b.onclick = () => {
+    S.mode = b.getAttribute('data-mode');
+    S.sel = null; S.armed = null; S.loadMsg = '';
+    render();
+  };
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { S.sel = null; S.armed = null; act = null; clr(L.live); render(); }
+});
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(function () {});
+}
+
+initField();
+render();
+</script>
+</body>
+</html>
