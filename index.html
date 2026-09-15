@@ -31,10 +31,13 @@
   }
   h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
 
-  header{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
+  header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);flex:none;position:relative;z-index:8}
   header .title{flex:1;min-width:0}
   header .title b{display:block;font-size:17px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   header .title span{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #back{
+    flex:none;min-width:58px;min-height:40px;padding:0 10px;font-size:14px;
+  }
   .tabs{display:flex;gap:3px;background:var(--ink-2);padding:3px;border-radius:9px;flex:none}
   .tabs button{
     border:0;background:none;color:var(--muted);font:inherit;font-weight:600;font-size:13.5px;
@@ -50,6 +53,22 @@
   }
   body.view-3d svg#field{visibility:hidden;pointer-events:none}
   body.view-3d #view3d{display:block}
+  body.view-3d #fieldwrap{flex:1;min-height:0;padding:0}
+  body.view-3d #dock{flex:none;max-height:22vh;padding:8px 10px 10px;overflow-y:auto}
+  body.view-3d.snapping #dock{display:none}
+  body.view-3d.snapping #fieldwrap{flex:1;min-height:0}
+  #hud{
+    display:none;position:absolute;left:8px;right:8px;top:8px;z-index:6;gap:8px;
+    pointer-events:none;
+  }
+  body.view-3d #hud:not([hidden]){display:flex}
+  #hud > *{pointer-events:auto;flex:1;min-height:46px}
+  #recenter{
+    display:none;position:absolute;right:12px;bottom:12px;z-index:6;
+    width:52px;height:52px;border-radius:50%;padding:0;min-width:0;min-height:0;
+    font-size:11px;font-weight:800;letter-spacing:.02em;
+  }
+  body.view-3d #recenter:not([hidden]){display:grid;place-items:center}
 
   #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:40vh;overflow-y:auto}
   .dock-handle{
@@ -129,6 +148,11 @@
   #gate .posgrid button{min-height:54px;width:100%}
   #gate .stack{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
   #gate .stack button{width:100%}
+  @media (max-width:520px){
+    .tabs button{padding:6px 7px;font-size:12px}
+    header .title b{font-size:15px}
+    #back{min-width:52px;padding:0 8px}
+  }
   .you{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .you b{flex:1;min-width:0}
   @media (min-width:900px){
@@ -136,6 +160,10 @@
     header{position:fixed;top:0;left:0;right:404px;z-index:5;background:var(--ink)}
     #fieldwrap{flex:1;padding-top:64px;min-height:0}
     #dock{width:404px;flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px}
+    body.view-3d header{right:0}
+    body.view-3d #fieldwrap{padding-top:56px}
+    body.view-3d #dock{width:100%;max-height:22vh;border-left:0;border-top:1px solid var(--line)}
+    body.view-3d{flex-direction:column}
     body.play-on header{position:fixed;padding:8px 12px}
     body.play-on header .title span{display:block}
     .dock-handle{display:none}
@@ -144,6 +172,7 @@
 </head>
 <body>
 <header>
+  <button id="back" class="btn ghost" type="button">Back</button>
   <div class="title"><b id="ttl">Playbook Trainer</b><span id="sub">Load your plays, then run them with a finger.</span></div>
   <div class="tabs" role="tablist">
     <button role="tab" data-mode="practice">Practice</button>
@@ -154,6 +183,8 @@
 <div id="fieldwrap">
   <svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg>
   <canvas id="view3d" aria-label="3D view from your player"></canvas>
+  <div id="hud"></div>
+  <button id="recenter" class="btn" type="button" hidden>Center</button>
 </div>
 <div id="dock"></div>
 <div id="gate" hidden></div>
@@ -214,7 +245,7 @@ function setPos(id) {
   S.pickingPos = false;
   S.sess = null;
   S.snapT = 0;
-  eye.yaw = 0; eye.pitch = -0.22; eye.dist = 11 * YARD;
+  resetEye();
   const p = currentPos();
   S.sideFilter = p ? p.side : 'both';
   S.style = 'guided';
@@ -255,6 +286,45 @@ function viewFlipped() {
 function use3d() {
   return !!S.view3d && S.mode !== 'plays' && !(S.mode === 'practice' && S.sess);
 }
+function resetEye() {
+  eye.yaw = 0;
+  eye.pitch = -0.42;
+  eye.dist = 10 * YARD;
+  eye.tx = 0;
+  eye.ty = 0;
+}
+function goBack() {
+  if (S.loadingPlays) { S.loadingPlays = false; render(); return; }
+  if (S.pickingPos && S.pos) { S.pickingPos = false; render(); return; }
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
+  if (S.snapping || S.fieldMax) {
+    S.snapping = false; S.fieldMax = false; S.snapT = 0; render(); return;
+  }
+  if (S.sess) { S.sess = null; S.dockOpen = false; render(); return; }
+  if (S.view3d) { S.view3d = false; S.snapping = false; save(); render(); return; }
+  if (S.mode === 'plays' && S.pane !== 'list') { S.pane = 'list'; render(); return; }
+  if (S.mode !== 'practice') { S.mode = 'practice'; render(); return; }
+}
+function updateHud() {
+  const hud = $('#hud');
+  const rec = $('#recenter');
+  const on = use3d();
+  hud.hidden = !on || !!S.snapping;
+  rec.hidden = !on;
+  document.body.classList.toggle('snapping', !!(on && S.snapping));
+  clr(hud);
+  if (!on || S.snapping) return;
+  const snap = el('button', { class: 'btn go', type: 'button' });
+  snap.textContent = 'Snap the ball';
+  snap.onclick = () => {
+    const play = S.sess ? sessPlay() : cur();
+    if (!play) return;
+    S.snapping = true; S.fieldMax = true; S.dockOpen = false; S.snapT = 0;
+    render();
+    animate(play);
+  };
+  hud.append(snap);
+}
 function viewChips(d) {
   const cs = el('div', { class: 'chips' });
   [['2d', '2D field'], ['3d', '3D snap']].forEach(o => {
@@ -264,14 +334,17 @@ function viewChips(d) {
     c.onclick = () => {
       S.view3d = o[0] === '3d';
       S.snapT = 0;
+      S.snapping = false;
+      S.dockOpen = false;
       if (anim) { cancelAnimationFrame(anim); anim = null; }
+      if (S.view3d) resetEye();
       save(); render();
     };
     cs.append(c);
   });
   d.append(cs);
   if (S.view3d) d.append(el('p', { class: 'hint', html: use3d()
-    ? 'You are standing at your spot. Drag to look around, then Snap the ball to see the play.'
+    ? 'Drag to rotate. Drag up/down to look from above. Pinch to zoom, two fingers to slide.'
     : '3D is the view from your spot. Tracing a route stays on the 2D field.' }));
   else if (viewFlipped()) d.append(el('p', { class: 'hint', html: 'Defense view: you are at the bottom of the field, looking at the offense.' }));
 }
@@ -685,7 +758,7 @@ function boot() {
     sess: null, pane: 'list', style: 'guided', pick: null, loadMsg: '',
     sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos,
     dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all',
-    view3d: !!(saved && saved.view3d), snapT: 0 }, base);
+    view3d: !!(saved && saved.view3d), snapT: 0, snapping: false }, base);
 }
 function folderOf(p) { return (p && p.folder) || 'My plays'; }
 function playFolders() {
@@ -756,7 +829,14 @@ function initField() {
 }
 let worldG = null;
 const view3d = $('#view3d');
-const eye = { yaw: 0, pitch: -0.22, dist: 11 * YARD };
+const eye = { yaw: 0, pitch: -0.42, dist: 10 * YARD, tx: 0, ty: 0 };
+const KITS = {};
+['blue-front', 'blue-back', 'white-front', 'white-back'].forEach(name => {
+  const img = new Image();
+  img.onload = () => { if (typeof paint3d === 'function') paint3d(); };
+  img.src = './sprites/' + name + '.png';
+  KITS[name] = img;
+});
 let anim = null;
 function applyView() {
   if (!worldG) return;
@@ -778,13 +858,39 @@ function atPath(path, t) {
   return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * u, y: pts[lo].y + (pts[hi].y - pts[lo].y) * u };
 }
 
-function cam3d(me) {
+function camPlayer(play) {
+  const mine = play.players.find(p => isMyPlayer(p));
+  if (mine) return mine;
+  const pos = currentPos();
+  const side = pos ? pos.side : null;
+  if (side) {
+    const mate = play.players.find(p => p.side === side && !p.scout);
+    if (mate) return mate;
+    if (side === 'def') return { x: 450, y: 788, side: 'def', id: '__you', label: pos.labels[0] };
+    return { x: 450, y: 940, side: 'off', id: '__you', label: pos.labels[0] };
+  }
+  return play.players.find(p => !p.scout) || play.players[0];
+}
+function lookTarget(me) {
   const lookX = W / 2;
-  const lookZ = me.side === 'def' ? LOS + 7 * YARD : LOS - 14 * YARD;
-  const yaw0 = Math.atan2(lookX - me.x, lookZ - me.y);
-  const yaw = yaw0 + eye.yaw;
-  const pitch = clamp(eye.pitch, -0.72, 0.35);
-  const dist = eye.dist;
+  const lookZ = me.side === 'def' ? LOS + 5 * YARD : LOS - 10 * YARD;
+  const steep = clamp((-clampPitch(eye.pitch) - 0.2) / 1.25, 0, 1);
+  const ax0 = me.x + (lookX - me.x) * 0.2 + (eye.tx || 0);
+  const az0 = me.y + (lookZ - me.y) * 0.4 + (eye.ty || 0);
+  const midZ = LOS - 7 * YARD;
+  return {
+    ax: clamp(ax0 + (lookX - ax0) * steep * 0.6, 40, W - 40),
+    az: clamp(az0 + (midZ - az0) * steep * 0.75, 40, H - 40),
+    yaw0: me.side === 'def' ? 0 : Math.PI
+  };
+}
+function clampPitch(p) { return clamp(p, -1.52, -0.16); }
+function clampDist(d) { return clamp(d, 3.2 * YARD, 52 * YARD); }
+function cam3d(me) {
+  const t = lookTarget(me);
+  const yaw = t.yaw0 + eye.yaw;
+  const pitch = clampPitch(eye.pitch);
+  const dist = clampDist(eye.dist);
   const fx = Math.sin(yaw) * Math.cos(pitch);
   const fy = Math.sin(pitch);
   const fz = Math.cos(yaw) * Math.cos(pitch);
@@ -795,16 +901,18 @@ function cam3d(me) {
   const ry = fz * ux - fx * uz;
   const rz = fx * uy - fy * ux;
   return {
-    cx: me.x - fx * dist, cy: 4.4 * YARD, cz: me.y - fz * dist,
+    cx: t.ax - fx * dist,
+    cy: Math.max(1.2 * YARD, -fy * dist),
+    cz: t.az - fz * dist,
     fx: fx, fy: fy, fz: fz, rx: rx, ry: ry, rz: rz, ux: ux, uy: uy, uz: uz,
-    fov: 0.92
+    yaw: yaw, pitch: pitch, dist: dist, fov: 0.84
   };
 }
 
 function proj3d(c, x, y, z, w, h) {
   const dx = x - c.cx, dy = y - c.cy, dz = z - c.cz;
   const f = dx * c.fx + dy * c.fy + dz * c.fz;
-  if (f < 14) return null;
+  if (f < 8) return null;
   const r = dx * c.rx + dy * c.ry + dz * c.rz;
   const u = dx * c.ux + dy * c.uy + dz * c.uz;
   const s = c.fov * (h * 0.52) / f;
@@ -831,19 +939,15 @@ function draw3d(play, t) {
   size3d();
   const ctx = view3d.getContext('2d');
   const w = view3d.width, h = view3d.height;
-  const me0 = play.players.find(p => isMyPlayer(p)) || play.players.find(p => !p.scout) || play.players[0];
+  const me0 = camPlayer(play);
   if (!me0) return;
-  const mePos = atPath(jobOf(me0), t) || me0;
+  const mePos = atPath(jobOf(me0) || [{ x: me0.x, y: me0.y }], t) || me0;
   const me = { x: mePos.x, y: mePos.y, side: me0.side, id: me0.id, label: me0.label };
   const cam = cam3d(me);
 
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#6eb7e0');
-  sky.addColorStop(0.46, '#d7eef8');
-  sky.addColorStop(0.46, '#2d6a44');
-  sky.addColorStop(1, '#163525');
-  ctx.fillStyle = sky;
+  ctx.fillStyle = '#6eb7e0';
   ctx.fillRect(0, 0, w, h);
+  fillField3d(ctx, cam, w, h);
 
   for (let k = -6; k <= 42; k++) {
     const z = LOS - k * YARD;
@@ -892,45 +996,87 @@ function draw3d(play, t) {
     return { p: p, pos: pos, pr: pr };
   }).filter(s => s.pr).sort((a, b) => b.pr.f - a.pr.f);
 
-  sprites.forEach(s => { if (s.p.id !== me.id) drawMan3d(ctx, s.p, s.pr, isMyPlayer(s.p)); });
+  sprites.forEach(s => drawMan3d(ctx, s.p, s.pr, isMyPlayer(s.p) || s.p.id === me.id, cam, s.pos));
 }
 
-function drawMan3d(ctx, p, pr, self) {
-  const ht = 1.9 * YARD * pr.s;
-  const wd = 0.72 * YARD * pr.s;
+function fillField3d(ctx, cam, w, h) {
+  const ring = [];
+  for (let x = 30; x <= 870; x += 40) ring.push([x, 20]);
+  for (let z = 20; z <= H - 20; z += 40) ring.push([870, z]);
+  for (let x = 870; x >= 30; x -= 40) ring.push([x, H - 20]);
+  for (let z = H - 20; z >= 20; z -= 40) ring.push([30, z]);
+  const pts = ring.map(q => proj3d(cam, q[0], 0, q[1], w, h)).filter(Boolean);
+  if (pts.length < 4) {
+    ctx.fillStyle = '#1d4a32';
+    ctx.fillRect(0, 0, w, h);
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.closePath();
+  ctx.fillStyle = '#2d6a44';
+  ctx.fill();
+  for (let k = -8; k <= 46; k += 10) {
+    const z0 = LOS - k * YARD, z1 = LOS - (k + 5) * YARD;
+    const a = proj3d(cam, 30, 0, z0, w, h), b = proj3d(cam, 870, 0, z0, w, h);
+    const c = proj3d(cam, 870, 0, z1, w, h), d = proj3d(cam, 30, 0, z1, w, h);
+    if (!a || !b || !c || !d) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(22,53,37,0.28)';
+    ctx.fill();
+  }
+}
+
+function kitOf(p, cam, pos) {
+  const team = p.side === 'def' ? 'blue' : 'white';
+  const face = p.side === 'def' ? 1 : -1;
+  const front = (cam.cz - pos.y) * face > 0;
+  return KITS[team + '-' + (front ? 'front' : 'back')];
+}
+function drawMan3d(ctx, p, pr, self, cam, pos) {
   const x = pr.x, y = pr.y;
   const def = p.side === 'def';
   const fog = clamp(1.15 - pr.f / (90 * YARD), 0.2, 1);
+  const img = kitOf(p, cam, pos);
+  const ready = img && img.complete && img.naturalWidth;
+  const ht = (ready ? 2.35 : 1.9) * YARD * pr.s;
+  const wd = ready ? ht * (img.naturalWidth / img.naturalHeight) : 0.72 * YARD * pr.s;
   ctx.save();
-  ctx.globalAlpha = (p.scout ? 0.45 : 1) * fog;
+  ctx.globalAlpha = (p.scout ? 0.55 : 1) * fog;
   ctx.fillStyle = 'rgba(0,0,0,0.32)';
-  ctx.beginPath(); ctx.ellipse(x, y, wd * 0.7, wd * 0.22, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = def ? '#1b2d3a' : '#dedede';
-  ctx.fillRect(x - wd * 0.22, y - ht * 0.55, wd * 0.44, ht * 0.55);
-  ctx.fillStyle = def ? '#2c4d64' : (p.scout ? '#d9d4c8' : '#f3f1ea');
-  ctx.fillRect(x - wd * 0.38, y - ht * 0.9, wd * 0.76, ht * 0.4);
-  if (def) {
-    ctx.strokeStyle = '#f1f4ee';
-    ctx.lineWidth = Math.max(1, wd * 0.06);
-    ctx.strokeRect(x - wd * 0.38, y - ht * 0.9, wd * 0.76, ht * 0.4);
+  ctx.beginPath(); ctx.ellipse(x, y, wd * 0.38, Math.max(2, wd * 0.12), 0, 0, Math.PI * 2); ctx.fill();
+  if (ready) {
+    ctx.drawImage(img, x - wd / 2, y - ht, wd, ht);
+  } else {
+    ctx.fillStyle = def ? '#1b2d3a' : '#dedede';
+    ctx.fillRect(x - wd * 0.22, y - ht * 0.55, wd * 0.44, ht * 0.55);
+    ctx.fillStyle = def ? '#2c4d64' : '#f3f1ea';
+    ctx.fillRect(x - wd * 0.38, y - ht * 0.9, wd * 0.76, ht * 0.4);
+    ctx.beginPath();
+    ctx.fillStyle = '#e4c39a';
+    ctx.arc(x, y - ht * 0.98, wd * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.fillStyle = def ? '#22394a' : '#b03a2e';
+    ctx.arc(x, y - ht * 1.02, wd * 0.3, Math.PI, 0);
+    ctx.fill();
   }
-  ctx.beginPath();
-  ctx.fillStyle = '#e4c39a';
-  ctx.arc(x, y - ht * 0.98, wd * 0.26, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.fillStyle = def ? '#22394a' : '#b03a2e';
-  ctx.arc(x, y - ht * 1.02, wd * 0.3, Math.PI, 0);
-  ctx.fill();
   if (self) {
     ctx.strokeStyle = '#f2c230';
-    ctx.lineWidth = Math.max(2, wd * 0.1);
-    ctx.strokeRect(x - wd * 0.42, y - ht * 1.18, wd * 0.84, ht * 1.18);
+    ctx.lineWidth = Math.max(2, wd * 0.06);
+    ctx.strokeRect(x - wd * 0.42, y - ht * 1.02, wd * 0.84, ht * 1.04);
   }
-  ctx.fillStyle = self ? '#f2c230' : '#f1f4ee';
-  ctx.font = 'bold ' + Math.max(12, Math.round(wd * 0.62)) + 'px sans-serif';
+  ctx.font = 'bold ' + Math.max(11, Math.round(wd * 0.28)) + 'px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(p.label, x, y - ht - 8);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(3, wd * 0.08);
+  ctx.strokeStyle = 'rgba(10,16,22,0.85)';
+  ctx.fillStyle = self ? '#f2c230' : '#f7f4ee';
+  ctx.strokeText(p.label, x, y - ht - 4);
+  ctx.fillText(p.label, x, y - ht - 4);
   ctx.restore();
 }
 function applyCam() {
@@ -939,13 +1085,32 @@ function applyCam() {
   cam.y = clamp(cam.y, 0, Math.max(0, H - vh));
   field.setAttribute('viewBox', cam.x + ' ' + cam.y + ' ' + vw + ' ' + vh);
 }
-function clientToField(cx, cy) {
+function clientToView(cx, cy) {
   const pt = field.createSVGPoint();
   pt.x = cx; pt.y = cy;
-  const m = (worldG || field).getScreenCTM();
-  if (!m) return { x: 0, y: 0 };
+  const m = field.getScreenCTM();
+  if (!m) return { x: cam.x, y: cam.y };
   const p = pt.matrixTransform(m.inverse());
   return { x: p.x, y: p.y };
+}
+function worldToView(x, y) {
+  return viewFlipped() ? { x: W - x, y: H - y } : { x: x, y: y };
+}
+function panBy(ax, ay, bx, by) {
+  const a = clientToView(ax, ay);
+  const b = clientToView(bx, by);
+  cam.x += a.x - b.x;
+  cam.y += a.y - b.y;
+  applyCam();
+}
+function beginPan(e) {
+  try { field.setPointerCapture(e.pointerId); } catch (err) {}
+  act = { type: 'pan', last: { x: e.clientX, y: e.clientY } };
+}
+function panMove(e) {
+  if (!act || act.type !== 'pan') return;
+  panBy(act.last.x, act.last.y, e.clientX, e.clientY);
+  act.last = { x: e.clientX, y: e.clientY };
 }
 function beginZoom() {
   const two = Array.from(screens.values()).slice(0, 2);
@@ -953,7 +1118,7 @@ function beginZoom() {
   const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
   act = { type: 'zoom',
     d0: Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y)),
-    z0: cam.z, f0: clientToField(mid.x, mid.y) };
+    z0: cam.z, f0: clientToView(mid.x, mid.y) };
 }
 function zoomMove() {
   const two = Array.from(screens.values()).slice(0, 2);
@@ -961,14 +1126,18 @@ function zoomMove() {
   const d = Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y));
   cam.z = clamp(act.z0 * (d / act.d0), 1, 5);
   applyCam();
-  const inv = (worldG || field).getScreenCTM();
-  if (!inv) return;
   const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
-  const p = field.createSVGPoint();
-  p.x = mid.x; p.y = mid.y;
-  const fMid = p.matrixTransform(inv.inverse());
-  cam.x += act.f0.x - fMid.x;
-  cam.y += act.f0.y - fMid.y;
+  const now = clientToView(mid.x, mid.y);
+  cam.x += act.f0.x - now.x;
+  cam.y += act.f0.y - now.y;
+  applyCam();
+}
+function focusOn(x, y, z) {
+  cam.z = clamp(z == null ? 2.2 : z, 1, 5);
+  const vw = W / cam.z, vh = H / cam.z;
+  const v = worldToView(x, y);
+  cam.x = v.x - vw / 2;
+  cam.y = v.y - vh * 0.62;
   applyCam();
 }
 
@@ -1071,7 +1240,7 @@ function fitPhoto(play, iw, ih) {
 /* ---------------- render ---------------- */
 function render() {
   Object.keys(L).forEach(k => clr(L[k]));
-  document.body.classList.toggle('play-on', !!(S.sess || S.fieldMax));
+  document.body.classList.toggle('play-on', !!(S.sess || S.fieldMax || S.snapping));
   document.querySelectorAll('.tabs button').forEach(b =>
     b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
   if (!S.pos || S.pickingPos) {
@@ -1084,6 +1253,7 @@ function render() {
       applyView();
       applyCam();
       paint3d();
+      updateHud();
       return;
     }
   } else if (S.loadingPlays) {
@@ -1095,6 +1265,7 @@ function render() {
   applyView();
   applyCam();
   paint3d();
+  updateHud();
 }
 function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
 function paint(play, showRoutes) {
@@ -1114,10 +1285,17 @@ function paint(play, showRoutes) {
     });
   });
 }
+function overlayBack() {
+  const b = el('button', { class: 'btn ghost', type: 'button' });
+  b.textContent = 'Back';
+  b.onclick = goBack;
+  return b;
+}
 function showGate() {
   const g = $('#gate');
   clr(g);
   g.hidden = false;
+  g.append(overlayBack());
   const p0 = currentPos();
   g.append(el('h2', { html: p0 ? 'Change player' : 'What position do you play?' }));
   g.append(el('p', { class: 'lead', html: 'The app will only ask you to run <b>your</b> assignment on each play.' }));
@@ -1167,12 +1345,13 @@ function showLoad() {
   const g = $('#gate');
   clr(g);
   g.hidden = false;
-  const has = S.plays.some(p => p.folder === FOLDER_MC);
+  g.append(overlayBack());
   g.append(el('h2', { html: 'Load plays' }));
   g.append(el('p', { class: 'lead', html: 'Load your team’s playbook, or bring in your own file.' }));
 
   g.append(el('h3', { class: 'sec', html: 'Team playbooks' }));
   const stack = el('div', { class: 'stack' });
+  const has = S.plays.some(p => p.folder === FOLDER_MC);
   const mc = el('button', { class: 'btn go' });
   mc.textContent = has ? 'Reload Malden Catholic Defense' : 'Malden Catholic Defense';
   mc.onclick = loadTeamMC;
@@ -1315,14 +1494,7 @@ function practiceSetup(d) {
   go.textContent = 'Start practice';
   go.disabled = !sessionPlays().length;
   go.onclick = startSession;
-  const bar = el('div', { class: 'bar' }, [go]);
-  if (S.view3d && cur()) {
-    const snap = el('button', { class: 'btn' });
-    snap.textContent = 'Snap the ball';
-    snap.onclick = () => { S.fieldMax = true; S.dockOpen = false; S.snapT = 0; render(); animate(cur()); };
-    bar.append(snap);
-  }
-  d.append(bar);
+  d.append(el('div', { class: 'bar' }, [go]));
 }
 
 function shuffle(a) { return a.slice().sort(() => Math.random() - .5); }
@@ -1355,6 +1527,9 @@ function loadTasks() {
   s.tasks = shuffle(myJobs(sessPlay()).map(p => p.id));
   s.t = 0; s.done = []; s.hint = 0; s.usedHint = false;
   s.result = null; s.trail = null; s.active = null; s.showAnswer = false;
+  const me = sessPlay().players.find(p => p.id === s.tasks[0]) ||
+    sessPlay().players.find(p => isMyPlayer(p));
+  if (me) focusOn(me.x, me.y, 2.3);
 }
 function target() {
   const s = S.sess;
@@ -1577,7 +1752,7 @@ function rStudy() {
   if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
 
   youBar(d);
-  d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+  if (!use3d()) d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
   folderChips(d);
   const studyPlays = (pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays)
     .filter(p => !S.bookFilter || S.bookFilter === 'all' || folderOf(p) === S.bookFilter);
@@ -1602,6 +1777,8 @@ function rStudy() {
       ? 'Your assignment' + (jobs.length === 1 ? '' : 's') + ': <b>' + jobs.map(p => p.label).join(', ') + '</b>.'
       : 'You do not have an assignment on this play. Pick another, or change player.' }));
   }
+
+  if (use3d()) return;
 
   const bar = el('div', { class: 'bar' });
   if (play.img) {
@@ -1636,7 +1813,16 @@ function animate(play) {
     S.snapT = t;
     if (use3d()) {
       draw3d(play, t);
-      anim = t < 1 ? requestAnimationFrame(step) : null;
+      if (t >= 1) {
+        anim = null;
+        S.snapping = false;
+        S.fieldMax = false;
+        updateHud();
+        document.body.classList.toggle('play-on', !!S.sess);
+        document.body.classList.remove('snapping');
+        return;
+      }
+      anim = requestAnimationFrame(step);
       return;
     }
     clr(L.trail); clr(L.token);
@@ -2191,6 +2377,7 @@ field.addEventListener('pointerdown', e => {
   if (photoTool) return photoDown(e, pos);
   if (S.mode === 'plays' && S.pane === 'list') return editDown(e, pos, pid);
   if (S.mode === 'practice' && S.sess) return runDown(e, pos, pid);
+  beginPan(e);
 });
 
 function photoDown(e, pos) {
@@ -2235,6 +2422,7 @@ field.addEventListener('pointermove', e => {
   const pos = toField(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, pos);
   if (act.type === 'zoom') { zoomMove(); return; }
+  if (act.type === 'pan') { panMove(e); return; }
   if (act.type === 'photo') { photoMove(); return; }
   if (act.type === 'drag') {
     act.p.x = pos.x + act.dx; act.p.y = pos.y + act.dy;
@@ -2261,6 +2449,7 @@ field.addEventListener('pointerup', e => {
     if (screens.size < 2) act = null;
     return;
   }
+  if (act.type === 'pan') { act = null; return; }
   if (act.type === 'photo') { act = null; save(); render(); return; }
   const a = act; act = null;
   try { field.releasePointerCapture(e.pointerId); } catch (err) {}
@@ -2319,22 +2508,23 @@ function editDown(e, pos, pid) {
 
 function runDown(e, pos, pid) {
   const s = S.sess, play = sessPlay();
-  if (s.result) return;
+  if (s.result) { beginPan(e); return; }
   let p;
   if (s.style === 'guided') {
     p = play.players.find(x => x.id === s.tasks[s.t]);
-    if (!p) return;
-    if (pid !== p.id && dist(pos, p) > R + 24) { bump('Start on the highlighted player.'); return; }
+    if (!p) { beginPan(e); return; }
+    if (pid !== p.id && dist(pos, p) > R + 24) { beginPan(e); return; }
   } else {
-    if (!pid) return;
+    if (!pid) { beginPan(e); return; }
     p = play.players.find(x => x.id === pid);
-    if (!p) return;
-    if (s.done.indexOf(pid) >= 0) { bump(p.label + ' is already done.'); return; }
+    if (!p) { beginPan(e); return; }
+    if (s.done.indexOf(pid) >= 0) { bump(p.label + ' is already done.'); beginPan(e); return; }
     if (s.tasks.indexOf(pid) < 0) {
-      const pos = currentPos();
+      const you = currentPos();
       bump(p.scout ? 'That is the other side of the ball. Pick your player.'
-                   : pos ? 'That is not the ' + pos.name.toLowerCase() + '. Start on your player.'
+                   : you ? 'That is not the ' + you.name.toLowerCase() + '. Start on your player.'
                          : p.label + ' has no assignment here — he rushes or blocks.');
+      beginPan(e);
       return;
     }
     s.active = pid;
@@ -2357,31 +2547,33 @@ document.querySelectorAll('.tabs button').forEach(b => {
     render();
   };
 });
+$('#back').onclick = goBack;
+$('#recenter').onclick = () => {
+  resetEye();
+  if (!anim) S.snapT = 0;
+  paint3d();
+};
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (S.loadingPlays) { S.loadingPlays = false; render(); return; }
-    S.sel = null; S.armed = null; act = null; clr(L.live); render();
+    goBack();
+    S.sel = null; S.armed = null; act = null; clr(L.live);
   }
 });
 document.addEventListener('gesturestart', e => e.preventDefault());
 $('#fieldwrap').addEventListener('wheel', e => {
   e.preventDefault();
   if (use3d()) {
-    eye.dist = clamp(eye.dist * (e.deltaY > 0 ? 1.08 : 0.92), 2.2 * YARD, 18 * YARD);
+    eye.dist = clampDist(eye.dist * (e.deltaY > 0 ? 1.08 : 0.92));
     paint3d();
     return;
   }
   const z0 = cam.z;
   const z = clamp(z0 * (e.deltaY > 0 ? 0.9 : 1.1), 1, 5);
   if (z === z0) return;
-  const f0 = clientToField(e.clientX, e.clientY);
+  const f0 = clientToView(e.clientX, e.clientY);
   cam.z = z;
   applyCam();
-  const m = (worldG || field).getScreenCTM();
-  if (!m) return;
-  const p = field.createSVGPoint();
-  p.x = e.clientX; p.y = e.clientY;
-  const fMid = p.matrixTransform(m.inverse());
+  const fMid = clientToView(e.clientX, e.clientY);
   cam.x += f0.x - fMid.x;
   cam.y += f0.y - fMid.y;
   applyCam();
@@ -2393,9 +2585,13 @@ view3d.addEventListener('pointerdown', e => {
   screens.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (screens.size >= 2) {
     const two = Array.from(screens.values()).slice(0, 2);
+    const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
+    const play = S.sess ? sessPlay() : cur();
+    const me = play && camPlayer(play);
+    const yaw = (me ? lookTarget(me).yaw0 : 0) + eye.yaw;
     act = { type: 'lookz',
       d0: Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y)),
-      dist0: eye.dist };
+      dist0: eye.dist, mid0: mid, tx0: eye.tx || 0, ty0: eye.ty || 0, yaw: yaw };
     return;
   }
   try { view3d.setPointerCapture(e.pointerId); } catch (err) {}
@@ -2408,13 +2604,20 @@ view3d.addEventListener('pointermove', e => {
     const two = Array.from(screens.values()).slice(0, 2);
     if (two.length < 2) return;
     const d = Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y));
-    eye.dist = clamp(act.dist0 * (act.d0 / d), 2.2 * YARD, 18 * YARD);
+    eye.dist = clampDist(act.dist0 * (act.d0 / d));
+    const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
+    const dx = mid.x - act.mid0.x, dy = mid.y - act.mid0.y;
+    const rx = Math.cos(act.yaw), rz = -Math.sin(act.yaw);
+    const fx = Math.sin(act.yaw), fz = Math.cos(act.yaw);
+    const k = eye.dist / 260;
+    eye.tx = act.tx0 - (dx * rx + dy * fx) * k;
+    eye.ty = act.ty0 - (dx * rz + dy * fz) * k;
     paint3d();
     return;
   }
   if (act.type !== 'look') return;
-  eye.yaw -= (e.clientX - act.last.x) * 0.006;
-  eye.pitch = clamp(eye.pitch + (e.clientY - act.last.y) * 0.004, -0.72, 0.35);
+  eye.yaw -= (e.clientX - act.last.x) * 0.007;
+  eye.pitch = clampPitch(eye.pitch - (e.clientY - act.last.y) * 0.006);
   act.last = { x: e.clientX, y: e.clientY };
   paint3d();
 });
