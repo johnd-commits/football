@@ -42,8 +42,14 @@
   }
   .tabs button[aria-selected="true"]{background:var(--ink-3);color:var(--chalk)}
 
-  #fieldwrap{flex:1;min-height:38vh;display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;touch-action:none}
+  #fieldwrap{flex:1;min-height:38vh;position:relative;display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;touch-action:none}
   svg#field{width:100%;height:100%;touch-action:none;display:block}
+  #view3d{
+    display:none;position:absolute;inset:0;width:100%;height:100%;
+    touch-action:none;background:#101b23;
+  }
+  body.view-3d svg#field{visibility:hidden;pointer-events:none}
+  body.view-3d #view3d{display:block}
 
   #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:40vh;overflow-y:auto}
   .dock-handle{
@@ -145,7 +151,10 @@
     <button role="tab" data-mode="plays">Plays</button>
   </div>
 </header>
-<div id="fieldwrap"><svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg></div>
+<div id="fieldwrap">
+  <svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg>
+  <canvas id="view3d" aria-label="3D view from your player"></canvas>
+</div>
 <div id="dock"></div>
 <div id="gate" hidden></div>
 
@@ -204,6 +213,8 @@ function setPos(id) {
   S.pos = id;
   S.pickingPos = false;
   S.sess = null;
+  S.snapT = 0;
+  eye.yaw = 0; eye.pitch = -0.22; eye.dist = 11 * YARD;
   const p = currentPos();
   S.sideFilter = p ? p.side : 'both';
   S.style = 'guided';
@@ -233,6 +244,36 @@ function youBar(d) {
     el('b', { html: 'You are the ' + p.name.toLowerCase() + '.' }),
     changePlayerBtn()
   ]));
+  if (S.mode !== 'plays') viewChips(d);
+}
+function viewFlipped() {
+  if (S.mode === 'plays') return false;
+  const p = currentPos();
+  if (p) return p.side === 'def';
+  return S.sideFilter === 'def';
+}
+function use3d() {
+  return !!S.view3d && S.mode !== 'plays' && !(S.mode === 'practice' && S.sess);
+}
+function viewChips(d) {
+  const cs = el('div', { class: 'chips' });
+  [['2d', '2D field'], ['3d', '3D snap']].forEach(o => {
+    const on = o[0] === '3d' ? !!S.view3d : !S.view3d;
+    const c = el('button', { class: 'chip', 'aria-pressed': String(on) });
+    c.textContent = o[1];
+    c.onclick = () => {
+      S.view3d = o[0] === '3d';
+      S.snapT = 0;
+      if (anim) { cancelAnimationFrame(anim); anim = null; }
+      save(); render();
+    };
+    cs.append(c);
+  });
+  d.append(cs);
+  if (S.view3d) d.append(el('p', { class: 'hint', html: use3d()
+    ? 'You are standing at your spot. Drag to look around, then Snap the ball to see the play.'
+    : '3D is the view from your spot. Tracing a route stays on the 2D field.' }));
+  else if (viewFlipped()) d.append(el('p', { class: 'hint', html: 'Defense view: you are at the bottom of the field, looking at the offense.' }));
 }
 
 /* ---------------- helpers ---------------- */
@@ -643,7 +684,8 @@ function boot() {
   return Object.assign({ mode: 'practice', tool: 'move', sel: null, armed: null,
     sess: null, pane: 'list', style: 'guided', pick: null, loadMsg: '',
     sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos,
-    dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all' }, base);
+    dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all',
+    view3d: !!(saved && saved.view3d), snapT: 0 }, base);
 }
 function folderOf(p) { return (p && p.folder) || 'My plays'; }
 function playFolders() {
@@ -657,7 +699,7 @@ function ensureTeamPacks(plays) {
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(
-      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos }));
+      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos, view3d: !!S.view3d }));
     S.saveErr = '';
   } catch (e) {
     S.saveErr = 'This browser is out of room. Remove a play picture or two — once a play is traced the picture is just a reference.';
@@ -684,6 +726,8 @@ function initField() {
   defs.append(arrow('m-ans', '#5fb0f0'), arrow('m-live', '#f2c230'), arrow('m-pass', '#4fd189'), tee);
   field.append(defs);
 
+  worldG = sv('g');
+  field.append(worldG);
   const g = sv('g');
   g.append(sv('rect', { x: 0, y: 0, width: W, height: H, fill: 'var(--turf)' }));
   for (let y = (LOS % 180) - 180; y < H; y += 180)
@@ -697,7 +741,7 @@ function initField() {
       { x1: 30, y1: y, x2: 870, y2: y, stroke: '#eaf0e8', 'stroke-width': 2, opacity: .3 }));
     if (k > 0) {
       const t = sv('text', { x: 44, y: y - 7, fill: '#eaf0e8', opacity: .5,
-        'font-size': 20, 'font-weight': 600 });
+        'font-size': 20, 'font-weight': 600, class: 'yd' });
       t.textContent = k; g.append(t);
     }
   }
@@ -706,9 +750,188 @@ function initField() {
       { x1: x - 7, y1: y, x2: x + 7, y2: y, stroke: '#eaf0e8', 'stroke-width': 2, opacity: .25 })));
   g.append(sv('line', { x1: 30, y1: LOS, x2: 870, y2: LOS, stroke: '#ffffff',
     'stroke-width': 4, 'stroke-dasharray': '15 10', opacity: .9 }));
-  field.append(g);
+  worldG.append(g);
 
-  ['photo', 'hint', 'trail', 'token', 'live'].forEach(n => { L[n] = sv('g'); field.append(L[n]); });
+  ['photo', 'hint', 'trail', 'token', 'live'].forEach(n => { L[n] = sv('g'); worldG.append(L[n]); });
+}
+let worldG = null;
+const view3d = $('#view3d');
+const eye = { yaw: 0, pitch: -0.22, dist: 11 * YARD };
+let anim = null;
+function applyView() {
+  if (!worldG) return;
+  const flip = viewFlipped();
+  worldG.setAttribute('transform', flip ? 'rotate(180 ' + (W / 2) + ' ' + (H / 2) + ')' : '');
+  worldG.querySelectorAll('text.yd').forEach(t => {
+    const x = t.getAttribute('x'), y = t.getAttribute('y');
+    t.setAttribute('transform', flip ? 'rotate(180 ' + x + ' ' + y + ')' : '');
+  });
+  document.body.classList.toggle('view-3d', use3d());
+}
+
+function atPath(path, t) {
+  if (!path || !path.length) return null;
+  if (path.length === 1 || t <= 0) return { x: path[0].x, y: path[0].y };
+  const pts = path.length > 8 ? path : resample(path, 48);
+  const i = clamp(t * (pts.length - 1), 0, pts.length - 1);
+  const lo = Math.floor(i), hi = Math.min(pts.length - 1, Math.ceil(i)), u = i - lo;
+  return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * u, y: pts[lo].y + (pts[hi].y - pts[lo].y) * u };
+}
+
+function cam3d(me) {
+  const lookX = W / 2;
+  const lookZ = me.side === 'def' ? LOS + 7 * YARD : LOS - 14 * YARD;
+  const yaw0 = Math.atan2(lookX - me.x, lookZ - me.y);
+  const yaw = yaw0 + eye.yaw;
+  const pitch = clamp(eye.pitch, -0.72, 0.35);
+  const dist = eye.dist;
+  const fx = Math.sin(yaw) * Math.cos(pitch);
+  const fy = Math.sin(pitch);
+  const fz = Math.cos(yaw) * Math.cos(pitch);
+  const ux = -Math.sin(yaw) * Math.sin(pitch);
+  const uy = Math.cos(pitch);
+  const uz = -Math.cos(yaw) * Math.sin(pitch);
+  const rx = fy * uz - fz * uy;
+  const ry = fz * ux - fx * uz;
+  const rz = fx * uy - fy * ux;
+  return {
+    cx: me.x - fx * dist, cy: 4.4 * YARD, cz: me.y - fz * dist,
+    fx: fx, fy: fy, fz: fz, rx: rx, ry: ry, rz: rz, ux: ux, uy: uy, uz: uz,
+    fov: 0.92
+  };
+}
+
+function proj3d(c, x, y, z, w, h) {
+  const dx = x - c.cx, dy = y - c.cy, dz = z - c.cz;
+  const f = dx * c.fx + dy * c.fy + dz * c.fz;
+  if (f < 14) return null;
+  const r = dx * c.rx + dy * c.ry + dz * c.rz;
+  const u = dx * c.ux + dy * c.uy + dz * c.uz;
+  const s = c.fov * (h * 0.52) / f;
+  return { x: w / 2 + r * s, y: h * 0.5 - u * s, f: f, s: s };
+}
+
+function size3d() {
+  const box = view3d.parentElement.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(box.width * dpr));
+  const h = Math.max(1, Math.round(box.height * dpr));
+  if (view3d.width !== w) view3d.width = w;
+  if (view3d.height !== h) view3d.height = h;
+}
+
+function paint3d() {
+  if (!use3d()) { document.body.classList.remove('view-3d'); return; }
+  document.body.classList.add('view-3d');
+  const play = S.sess ? sessPlay() : cur();
+  if (play) draw3d(play, S.snapT || 0);
+}
+
+function draw3d(play, t) {
+  size3d();
+  const ctx = view3d.getContext('2d');
+  const w = view3d.width, h = view3d.height;
+  const me0 = play.players.find(p => isMyPlayer(p)) || play.players.find(p => !p.scout) || play.players[0];
+  if (!me0) return;
+  const mePos = atPath(jobOf(me0), t) || me0;
+  const me = { x: mePos.x, y: mePos.y, side: me0.side, id: me0.id, label: me0.label };
+  const cam = cam3d(me);
+
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#6eb7e0');
+  sky.addColorStop(0.46, '#d7eef8');
+  sky.addColorStop(0.46, '#2d6a44');
+  sky.addColorStop(1, '#163525');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+
+  for (let k = -6; k <= 42; k++) {
+    const z = LOS - k * YARD;
+    const a = proj3d(cam, 30, 0, z, w, h), b = proj3d(cam, 870, 0, z, w, h);
+    if (!a || !b) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    if (k === 0) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; }
+    else if (k % 5 === 0) { ctx.strokeStyle = 'rgba(234,240,232,0.5)'; ctx.lineWidth = 1.6; }
+    else { ctx.strokeStyle = 'rgba(234,240,232,0.12)'; ctx.lineWidth = 1; }
+    ctx.stroke();
+    if (k > 0 && k % 5 === 0) {
+      ctx.fillStyle = 'rgba(234,240,232,0.6)';
+      ctx.font = Math.max(11, Math.round(h / 42)) + 'px sans-serif';
+      ctx.fillText(String(k), a.x + 8, a.y - 4);
+    }
+  }
+  [30, 870].forEach(x => {
+    const a = proj3d(cam, x, 0, 40, w, h), b = proj3d(cam, x, 0, H - 40, w, h);
+    if (!a || !b) return;
+    ctx.strokeStyle = 'rgba(234,240,232,0.75)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  });
+
+  play.players.forEach(p => {
+    const path = jobOf(p);
+    if (!path || path.length < 2) return;
+    ctx.beginPath();
+    let started = false;
+    path.forEach(q => {
+      const pr = proj3d(cam, q.x, 0.4, q.y, w, h);
+      if (!pr) return;
+      if (!started) { ctx.moveTo(pr.x, pr.y); started = true; }
+      else ctx.lineTo(pr.x, pr.y);
+    });
+    if (!started) return;
+    ctx.strokeStyle = isMyPlayer(p) ? 'rgba(242,194,48,0.85)' : 'rgba(242,194,48,0.28)';
+    ctx.lineWidth = isMyPlayer(p) ? 4 : 2;
+    ctx.stroke();
+  });
+
+  const sprites = play.players.map(p => {
+    const pos = atPath(jobOf(p) || [{ x: p.x, y: p.y }], t) || p;
+    const pr = proj3d(cam, pos.x, 0, pos.y, w, h);
+    return { p: p, pos: pos, pr: pr };
+  }).filter(s => s.pr).sort((a, b) => b.pr.f - a.pr.f);
+
+  sprites.forEach(s => { if (s.p.id !== me.id) drawMan3d(ctx, s.p, s.pr, isMyPlayer(s.p)); });
+}
+
+function drawMan3d(ctx, p, pr, self) {
+  const ht = 1.9 * YARD * pr.s;
+  const wd = 0.72 * YARD * pr.s;
+  const x = pr.x, y = pr.y;
+  const def = p.side === 'def';
+  const fog = clamp(1.15 - pr.f / (90 * YARD), 0.2, 1);
+  ctx.save();
+  ctx.globalAlpha = (p.scout ? 0.45 : 1) * fog;
+  ctx.fillStyle = 'rgba(0,0,0,0.32)';
+  ctx.beginPath(); ctx.ellipse(x, y, wd * 0.7, wd * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = def ? '#1b2d3a' : '#dedede';
+  ctx.fillRect(x - wd * 0.22, y - ht * 0.55, wd * 0.44, ht * 0.55);
+  ctx.fillStyle = def ? '#2c4d64' : (p.scout ? '#d9d4c8' : '#f3f1ea');
+  ctx.fillRect(x - wd * 0.38, y - ht * 0.9, wd * 0.76, ht * 0.4);
+  if (def) {
+    ctx.strokeStyle = '#f1f4ee';
+    ctx.lineWidth = Math.max(1, wd * 0.06);
+    ctx.strokeRect(x - wd * 0.38, y - ht * 0.9, wd * 0.76, ht * 0.4);
+  }
+  ctx.beginPath();
+  ctx.fillStyle = '#e4c39a';
+  ctx.arc(x, y - ht * 0.98, wd * 0.26, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = def ? '#22394a' : '#b03a2e';
+  ctx.arc(x, y - ht * 1.02, wd * 0.3, Math.PI, 0);
+  ctx.fill();
+  if (self) {
+    ctx.strokeStyle = '#f2c230';
+    ctx.lineWidth = Math.max(2, wd * 0.1);
+    ctx.strokeRect(x - wd * 0.42, y - ht * 1.18, wd * 0.84, ht * 1.18);
+  }
+  ctx.fillStyle = self ? '#f2c230' : '#f1f4ee';
+  ctx.font = 'bold ' + Math.max(12, Math.round(wd * 0.62)) + 'px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(p.label, x, y - ht - 8);
+  ctx.restore();
 }
 function applyCam() {
   const vw = W / cam.z, vh = H / cam.z;
@@ -719,7 +942,7 @@ function applyCam() {
 function clientToField(cx, cy) {
   const pt = field.createSVGPoint();
   pt.x = cx; pt.y = cy;
-  const m = field.getScreenCTM();
+  const m = (worldG || field).getScreenCTM();
   if (!m) return { x: 0, y: 0 };
   const p = pt.matrixTransform(m.inverse());
   return { x: p.x, y: p.y };
@@ -738,7 +961,7 @@ function zoomMove() {
   const d = Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y));
   cam.z = clamp(act.z0 * (d / act.d0), 1, 5);
   applyCam();
-  const inv = field.getScreenCTM();
+  const inv = (worldG || field).getScreenCTM();
   if (!inv) return;
   const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
   const p = field.createSVGPoint();
@@ -781,6 +1004,7 @@ function token(layer, p, o) {
     'font-weight': 750, 'pointer-events': 'none',
     fill: p.side === 'def' ? '#f1f4ee' : '#101b23', opacity: op });
   t.textContent = p.label; g.append(t);
+  if (viewFlipped()) g.setAttribute('transform', 'rotate(180 ' + p.x + ' ' + p.y + ')');
   if (o.ring) g.append(sv('circle', { cx: p.x, cy: p.y, r: R + 11, fill: 'none',
     stroke: o.ring, 'stroke-width': 4, 'pointer-events': 'none', class: o.pulse ? 'pulse' : '' }));
   g.append(sv('circle', { cx: p.x, cy: p.y, r: R + 16, fill: 'transparent' })); // fat finger target
@@ -836,7 +1060,9 @@ function render() {
       const play = cur();
       if (play) paint(play, false);
       clr($('#dock'));
+      applyView();
       applyCam();
+      paint3d();
       return;
     }
   } else if (S.loadingPlays) {
@@ -845,7 +1071,9 @@ function render() {
     hideGate();
   }
   ({ practice: rPractice, study: rStudy, plays: rPlays })[S.mode]();
+  applyView();
   applyCam();
+  paint3d();
 }
 function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
 function paint(play, showRoutes) {
@@ -1066,7 +1294,14 @@ function practiceSetup(d) {
   go.textContent = 'Start practice';
   go.disabled = !sessionPlays().length;
   go.onclick = startSession;
-  d.append(el('div', { class: 'bar' }, [go]));
+  const bar = el('div', { class: 'bar' }, [go]);
+  if (S.view3d && cur()) {
+    const snap = el('button', { class: 'btn' });
+    snap.textContent = 'Snap the ball';
+    snap.onclick = () => { S.fieldMax = true; S.dockOpen = false; S.snapT = 0; render(); animate(cur()); };
+    bar.append(snap);
+  }
+  d.append(bar);
 }
 
 function shuffle(a) { return a.slice().sort(() => Math.random() - .5); }
@@ -1305,7 +1540,6 @@ function finish() {
 }
 
 /* ===================== STUDY ===================== */
-let anim = null;
 function rStudy() {
   const d = $('#dock'); clr(d);
   const pos = currentPos();
@@ -1332,7 +1566,7 @@ function rStudy() {
   studyPlays.forEach(p => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
     c.textContent = p.name;
-    c.onclick = () => { S.currentId = p.id; save(); render(); };
+    c.onclick = () => { S.currentId = p.id; S.snapT = 0; save(); render(); };
     chips.append(c);
   });
   d.append(chips);
@@ -1353,8 +1587,9 @@ function rStudy() {
     pk.onclick = () => { S.peek = !S.peek; render(); };
     bar.append(pk);
   }
-  const run = el('button', { class: 'btn go' }); run.textContent = 'Run the play';
-  run.onclick = () => { S.fieldMax = true; S.dockOpen = false; animate(play); render(); };
+  const run = el('button', { class: 'btn go' });
+  run.textContent = S.view3d ? 'Snap the ball' : 'Run the play';
+  run.onclick = () => { S.fieldMax = true; S.dockOpen = false; S.snapT = 0; render(); animate(play); };
   const flip = el('button', { class: 'btn' }); flip.textContent = 'Flip sides';
   flip.onclick = () => { flipPlay(play); save(); render(); };
   bar.append(run, flip);
@@ -1370,10 +1605,17 @@ function rStudy() {
 
 function animate(play) {
   if (anim) cancelAnimationFrame(anim);
-  const movers = runners(play).map(p => ({ p: p, pts: resample(p.route, 70) }));
-  const t0 = performance.now(), dur = 2400;
+  const movers = play.players.filter(p => jobOf(p)).map(p => ({ p: p, pts: resample(jobOf(p), 70) }));
+  const t0 = performance.now();
+  const dur = use3d() ? 2800 : 2400;
   const step = now => {
     const t = clamp((now - t0) / dur, 0, 1);
+    S.snapT = t;
+    if (use3d()) {
+      draw3d(play, t);
+      anim = t < 1 ? requestAnimationFrame(step) : null;
+      return;
+    }
     clr(L.trail); clr(L.token);
     play.players.forEach(p => { if (p.block) blockMark(L.trail, p); });
     movers.forEach(m => {
@@ -1900,7 +2142,7 @@ function exportFile() {
 function toField(e) {
   const pt = field.createSVGPoint();
   pt.x = e.clientX; pt.y = e.clientY;
-  const m = field.getScreenCTM();
+  const m = (worldG || field).getScreenCTM();
   if (!m) return { x: 0, y: 0 };
   const p = pt.matrixTransform(m.inverse());
   return { x: clamp(p.x, 0, W), y: clamp(p.y, 0, H) };
@@ -2101,13 +2343,18 @@ document.addEventListener('keydown', e => {
 document.addEventListener('gesturestart', e => e.preventDefault());
 $('#fieldwrap').addEventListener('wheel', e => {
   e.preventDefault();
+  if (use3d()) {
+    eye.dist = clamp(eye.dist * (e.deltaY > 0 ? 1.08 : 0.92), 2.2 * YARD, 18 * YARD);
+    paint3d();
+    return;
+  }
   const z0 = cam.z;
   const z = clamp(z0 * (e.deltaY > 0 ? 0.9 : 1.1), 1, 5);
   if (z === z0) return;
   const f0 = clientToField(e.clientX, e.clientY);
   cam.z = z;
   applyCam();
-  const m = field.getScreenCTM();
+  const m = (worldG || field).getScreenCTM();
   if (!m) return;
   const p = field.createSVGPoint();
   p.x = e.clientX; p.y = e.clientY;
@@ -2116,6 +2363,47 @@ $('#fieldwrap').addEventListener('wheel', e => {
   cam.y += f0.y - fMid.y;
   applyCam();
 }, { passive: false });
+
+view3d.addEventListener('pointerdown', e => {
+  if (!use3d()) return;
+  e.preventDefault();
+  screens.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (screens.size >= 2) {
+    const two = Array.from(screens.values()).slice(0, 2);
+    act = { type: 'lookz',
+      d0: Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y)),
+      dist0: eye.dist };
+    return;
+  }
+  try { view3d.setPointerCapture(e.pointerId); } catch (err) {}
+  act = { type: 'look', last: { x: e.clientX, y: e.clientY } };
+});
+view3d.addEventListener('pointermove', e => {
+  if (screens.has(e.pointerId)) screens.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!act) return;
+  if (act.type === 'lookz') {
+    const two = Array.from(screens.values()).slice(0, 2);
+    if (two.length < 2) return;
+    const d = Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y));
+    eye.dist = clamp(act.dist0 * (act.d0 / d), 2.2 * YARD, 18 * YARD);
+    paint3d();
+    return;
+  }
+  if (act.type !== 'look') return;
+  eye.yaw -= (e.clientX - act.last.x) * 0.006;
+  eye.pitch = clamp(eye.pitch + (e.clientY - act.last.y) * 0.004, -0.72, 0.35);
+  act.last = { x: e.clientX, y: e.clientY };
+  paint3d();
+});
+view3d.addEventListener('pointerup', e => {
+  screens.delete(e.pointerId);
+  if (act && (act.type === 'look' || act.type === 'lookz') && screens.size < 2) act = null;
+});
+view3d.addEventListener('pointercancel', e => {
+  screens.delete(e.pointerId);
+  if (act && (act.type === 'look' || act.type === 'lookz')) act = null;
+});
+window.addEventListener('resize', () => { if (use3d()) paint3d(); });
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(function () {});
