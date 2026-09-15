@@ -752,7 +752,7 @@ function initField() {
     'stroke-width': 4, 'stroke-dasharray': '15 10', opacity: .9 }));
   worldG.append(g);
 
-  ['photo', 'hint', 'trail', 'token', 'live'].forEach(n => { L[n] = sv('g'); worldG.append(L[n]); });
+  ['photo', 'hint', 'trail', 'token', 'call', 'live'].forEach(n => { L[n] = sv('g'); worldG.append(L[n]); });
 }
 let worldG = null;
 const view3d = $('#view3d');
@@ -988,6 +988,27 @@ function blockMark(layer, p) {
   line(layer, [{ x: p.x, y: p.y }, { x: p.x, y: p.y + dir * 40 }],
     { color: '#f1f4ee', w: 3, op: .7, arrow: 'm-tee' });
 }
+function paintCall(name) {
+  name = String(name || '').trim();
+  if (!name || !L.call) return;
+  const y = LOS - 37 * YARD;
+  const t = sv('text', {
+    x: W / 2, y: y, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    fill: '#ffffff', 'font-size': 56, 'font-weight': 800, 'letter-spacing': '0.06em',
+    'paint-order': 'stroke', stroke: 'rgba(16,27,35,0.55)', 'stroke-width': 10,
+    'pointer-events': 'none', class: 'call'
+  });
+  t.textContent = name;
+  L.call.append(t);
+  const wide = t.getComputedTextLength();
+  if (wide > 780) {
+    const size = Math.max(28, 56 * 780 / wide);
+    t.setAttribute('font-size', size);
+    t.setAttribute('stroke-width', Math.max(5, size / 5.5));
+  }
+  if (viewFlipped()) t.setAttribute('transform', 'rotate(180 ' + (W / 2) + ' ' + y + ')');
+}
+
 function token(layer, p, o) {
   o = o || {};
   const g = sv('g', { 'data-pid': p.id });
@@ -1378,6 +1399,8 @@ function practiceRun(d) {
                                : (askable || doneAlready ? 1 : .45)
     });
   });
+
+  paintCall(play.name);
 
   const slim = !S.dockOpen;
   const handle = el('button', { class: 'dock-handle', 'aria-label': slim ? 'Show menu' : 'Hide menu' });

@@ -1,4 +1,4 @@
-const CACHE = 'playbook-trainer-v6';
+const CACHE = 'playbook-trainer-v7';
 const ASSETS = [
   './',
   './index.html',
