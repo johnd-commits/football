@@ -204,8 +204,10 @@
     font-size:18px;line-height:36px;cursor:pointer;padding:0;
   }
   #play-menu .nav:active{color:var(--marker)}
-  #play-menu .plist{
-    flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  #play-menu .grp{
+    position:sticky;top:0;z-index:1;padding:8px 12px 4px;
+    font-size:11px;font-weight:800;letter-spacing:.02em;
+    color:var(--muted);background:var(--ink);
   }
   #play-menu .play{
     display:block;width:100%;border:0;background:transparent;color:var(--chalk);
@@ -384,6 +386,30 @@ function startSnap() {
 function railPlays() {
   return S.plays.slice();
 }
+function playMenuGroup(p) {
+  if (folderOf(p) === 'Samples') return sideOf(p) === 'def' ? 'Samples (Def)' : 'Samples (Off)';
+  return folderOf(p);
+}
+function groupedRailPlays() {
+  const groups = [];
+  railPlays().forEach(p => {
+    const f = playMenuGroup(p);
+    let g = groups.find(x => x.f === f);
+    if (!g) { g = { f: f, plays: [] }; groups.push(g); }
+    g.plays.push(p);
+  });
+  const order = ['Samples (Off)', 'Samples (Def)'];
+  groups.sort((a, b) => {
+    const ia = order.indexOf(a.f), ib = order.indexOf(b.f);
+    if (ia >= 0 || ib >= 0) {
+      if (ia < 0) return 1;
+      if (ib < 0) return -1;
+      return ia - ib;
+    }
+    return a.f.localeCompare(b.f);
+  });
+  return groups;
+}
 function stepRail(dir) {
   const plays = railPlays();
   if (!plays.length) return;
@@ -412,7 +438,6 @@ function dropPlayMenu() {
 }
 function playMenuPanel() {
   const panel = el('div', { id: 'play-menu' });
-  const plays = railPlays();
   const up = el('button', { class: 'nav', type: 'button', 'aria-label': 'Previous play' });
   up.textContent = '▲';
   up.onclick = ev => { ev.stopPropagation(); stepRail(-1); };
@@ -420,17 +445,21 @@ function playMenuPanel() {
   down.textContent = '▼';
   down.onclick = ev => { ev.stopPropagation(); stepRail(1); };
   const list = el('div', { class: 'plist' });
-  if (!plays.length) {
+  const groups = groupedRailPlays();
+  if (!groups.length) {
     list.append(el('p', { class: 'hint', html: 'No plays loaded yet.' }));
   } else {
-    plays.forEach(p => {
-      const attrs = { class: 'play', type: 'button' };
-      if (p.id === S.currentId) attrs['aria-current'] = 'true';
-      const b = el('button', attrs);
-      b.textContent = p.name;
-      b.title = p.name;
-      b.onclick = ev => { ev.stopPropagation(); pickPlay(p); };
-      list.append(b);
+    groups.forEach(gr => {
+      list.append(el('div', { class: 'grp', html: gr.f }));
+      gr.plays.forEach(p => {
+        const attrs = { class: 'play', type: 'button' };
+        if (p.id === S.currentId) attrs['aria-current'] = 'true';
+        const b = el('button', attrs);
+        b.textContent = p.name;
+        b.title = p.name + ' · ' + playMenuGroup(p);
+        b.onclick = ev => { ev.stopPropagation(); pickPlay(p); };
+        list.append(b);
+      });
     });
   }
   panel.append(up, list, down);
