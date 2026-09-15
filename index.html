@@ -42,10 +42,23 @@
   }
   .tabs button[aria-selected="true"]{background:var(--ink-3);color:var(--chalk)}
 
-  #fieldwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px}
+  #fieldwrap{flex:1;min-height:38vh;display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;touch-action:none}
   svg#field{width:100%;height:100%;touch-action:none;display:block}
 
-  #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:52vh;overflow-y:auto}
+  #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:40vh;overflow-y:auto}
+  .dock-handle{
+    display:block;width:42px;height:5px;margin:0 auto 8px;border:0;padding:10px 0 8px;
+    background:transparent;cursor:pointer;
+  }
+  .dock-handle::before{
+    content:"";display:block;width:42px;height:5px;margin:0 auto;border-radius:99px;background:var(--line);
+  }
+  body.play-on header{padding:4px 10px}
+  body.play-on header .title span{display:none}
+  body.play-on .tabs button{padding:5px 9px;font-size:12.5px}
+  body.play-on #dock{max-height:none;padding:4px 12px 10px}
+  body.play-on #dock.slim{padding-bottom:8px}
+  body.play-on #fieldwrap{min-height:0}
   .banner{display:flex;align-items:center;gap:12px;margin-bottom:8px}
   .verdict{font-size:26px;font-weight:800;letter-spacing:.02em;padding:2px 14px;border-radius:8px;flex:none}
   .verdict.pass{background:var(--pass);color:#08301c}
@@ -108,13 +121,18 @@
   #gate .lead{color:var(--muted);margin:0 0 18px;font-size:15.5px}
   #gate .posgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px}
   #gate .posgrid button{min-height:54px;width:100%}
+  #gate .stack{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
+  #gate .stack button{width:100%}
   .you{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .you b{flex:1;min-width:0}
   @media (min-width:900px){
     body{flex-direction:row}
     header{position:fixed;top:0;left:0;right:404px;z-index:5;background:var(--ink)}
-    #fieldwrap{flex:1;padding-top:64px}
+    #fieldwrap{flex:1;padding-top:64px;min-height:0}
     #dock{width:404px;flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px}
+    body.play-on header{position:fixed;padding:8px 12px}
+    body.play-on header .title span{display:block}
+    .dock-handle{display:none}
   }
 </style>
 </head>
@@ -141,6 +159,7 @@
 
 const KEY = 'playbook.trainer.v2';
 const W = 900, H = 1100, LOS = 880, YARD = 18, R = 21;
+const cam = { z: 1, x: 0, y: 0 };
 
 const POSITIONS = [
   { id: 'qb', name: 'Quarterback', group: 'Offense', side: 'off', labels: ['QB', 'Q'] },
@@ -159,9 +178,13 @@ const currentPos = () => POSITIONS.find(p => p.id === S.pos) || null;
 function isMyPlayer(p) {
   const pos = currentPos();
   if (!pos || !p || p.scout) return false;
-  const lab = String(p.label || '').toUpperCase();
   const id = String(p.id || '').toUpperCase();
-  return pos.labels.some(l => l.toUpperCase() === lab || l.toUpperCase() === id);
+  const lab = String(p.label || '').toUpperCase();
+  const hit = x => pos.labels.some(l => l.toUpperCase() === x);
+  if (hit(id)) return true;
+  const owned = POSITIONS.find(q => q.labels.some(l => l.toUpperCase() === id));
+  if (owned) return owned.id === pos.id;
+  return hit(lab);
 }
 function jobOf(p) {
   if (!p) return null;
@@ -353,6 +376,194 @@ function mkD(name, type, notes, routes, rushers) {
     players: def.concat(scout) };
 }
 
+const FOLDER_MC = 'Malden Catholic Defense';
+const DL = ['LE', 'DT', 'NT', 'RE'];
+const man = [[0, 6]];
+const qtr = [[0, 12]];
+
+function scoutForm(form) {
+  const ol = [
+    ['LT', 350, 896], ['LG', 400, 896], ['C', 450, 896],
+    ['RG', 500, 896], ['RT', 550, 896],
+    ['Q', 450, 968], ['A', 505, 968]
+  ];
+  const wr = form === 'lt'
+    ? [['X', 120, 890], ['Z', 230, 890], ['F', 330, 896], ['X2', 800, 890]]
+    : form === 'dbl'
+    ? [['X', 120, 890], ['Z', 230, 890], ['F', 620, 896], ['X2', 800, 890]]
+    : form === 'rip'
+    ? [['X2', 120, 890], ['Z', 605, 900], ['F', 650, 896], ['X', 800, 890]]
+    : [['X2', 120, 890], ['F', 620, 896], ['Z', 720, 890], ['X', 800, 890]];
+  return ol.concat(wr).map(function (b) {
+    return { id: 'o' + b[0], label: b[0], x: b[1], y: b[2], side: 'off',
+      scout: true, block: false, route: null };
+  });
+}
+
+function d425(form) {
+  const dl = [
+    { id: 'LE', label: 'S', x: 340, y: 858 },
+    { id: 'DT', label: 'T', x: 410, y: 858 },
+    { id: 'NT', label: 'T', x: 492, y: 858 },
+    { id: 'RE', label: 'S', x: 562, y: 858 }
+  ];
+  if (form === 'lt') {
+    return dl.concat([
+      { id: 'W', label: 'W', x: 560, y: 788 },
+      { id: 'M', label: 'M', x: 445, y: 782 },
+      { id: 'N', label: 'N', x: 230, y: 816 },
+      { id: 'LC', label: 'C', x: 120, y: 816 },
+      { id: 'RC', label: 'C', x: 800, y: 816 },
+      { id: 'FS', label: 'FS', x: 300, y: 700 },
+      { id: 'SS', label: 'SS', x: 520, y: 710 }
+    ]);
+  }
+  if (form === 'dbl') {
+    return dl.concat([
+      { id: 'W', label: 'W', x: 560, y: 788 },
+      { id: 'M', label: 'M', x: 445, y: 782 },
+      { id: 'N', label: 'N', x: 230, y: 816 },
+      { id: 'LC', label: 'C', x: 120, y: 816 },
+      { id: 'RC', label: 'C', x: 800, y: 816 },
+      { id: 'FS', label: 'FS', x: 380, y: 646 },
+      { id: 'SS', label: 'SS', x: 620, y: 710 }
+    ]);
+  }
+  if (form === 'rip') {
+    return dl.concat([
+      { id: 'W', label: 'W', x: 360, y: 788 },
+      { id: 'M', label: 'M', x: 455, y: 782 },
+      { id: 'N', label: 'N', x: 650, y: 816 },
+      { id: 'LC', label: 'C', x: 120, y: 816 },
+      { id: 'RC', label: 'C', x: 800, y: 816 },
+      { id: 'FS', label: 'FS', x: 450, y: 646 },
+      { id: 'SS', label: 'SS', x: 560, y: 760 }
+    ]);
+  }
+  return dl.concat([
+    { id: 'W', label: 'W', x: 340, y: 788 },
+    { id: 'M', label: 'M', x: 455, y: 782 },
+    { id: 'N', label: 'N', x: 720, y: 816 },
+    { id: 'LC', label: 'C', x: 120, y: 816 },
+    { id: 'RC', label: 'C', x: 800, y: 816 },
+    { id: 'FS', label: 'FS', x: 620, y: 700 },
+    { id: 'SS', label: 'SS', x: 400, y: 710 }
+  ]);
+}
+
+function mkMC(name, type, notes, form, spec) {
+  spec = spec || {};
+  const rushers = spec.rushers || DL;
+  const def = d425(form).map(function (p) {
+    const steps = spec.routes && spec.routes[p.id];
+    const route = steps && steps.length
+      ? [{ x: p.x, y: p.y }].concat(steps.map(function (s) {
+          return { x: p.x + s[0] * YARD, y: p.y - s[1] * YARD };
+        }))
+      : null;
+    return { id: p.id, label: p.label, x: p.x, y: p.y, side: 'def',
+      block: rushers.indexOf(p.id) >= 0, route: route };
+  });
+  return { id: uid(), name: name, type: type, notes: notes, side: 'def',
+    folder: FOLDER_MC, players: def.concat(scoutForm(form)) };
+}
+
+function maldenCatholic() {
+  return [
+    mkMC('Atlanta 0', 'Blitz', 'Cover 0 vs Trips RT. Linebackers through the A gaps. Everybody else is man.',
+      'rt', { rushers: DL.concat(['W', 'M']), routes: {
+        W: [[1.6, -4.5]], M: [[-0.4, -4.5]],
+        LC: man, RC: man, N: man, FS: man, SS: [[1, 3]]
+      }}),
+    mkMC('Bengals 3', 'Blitz', 'Cover 3 vs Trips LT. Isolated corner blitzes. Safeties and the other corner take the deep thirds.',
+      'lt', { rushers: DL.concat(['RC']), routes: {
+        RC: [[-0.6, -6]], LC: [[-1, 12]], FS: [[3, 10]], SS: [[-1, 5]],
+        N: [[1, 4]], W: [[1, 3]], M: [[0, 4]]
+      }}),
+    mkMC('Bulls 0', 'Blitz', 'Cover 0 vs Trips RT. Linebackers through the B gaps. Everybody else is man.',
+      'rt', { rushers: DL.concat(['W', 'M']), routes: {
+        W: [[0.5, -4.5]], M: [[1.1, -4.5]],
+        LC: man, RC: man, N: man, FS: man, SS: [[1, 3]]
+      }}),
+    mkMC('Cobra 3', 'Blitz', 'Cover 3 vs Trips RT. Isolated corner blitzes. Strong end drops. Free safety and the other corner take the deep thirds.',
+      'rt', { rushers: ['LE', 'DT', 'NT', 'LC'], routes: {
+        LC: [[0.8, -6]], RE: [[2.2, 5]], SS: [[-3, 12]], FS: [[2, 10]],
+        RC: qtr, N: [[-1.2, 5]], W: [[-1, 4]], M: [[0, 5]]
+      }}),
+    mkMC('Doubles', 'Blitz', 'Cover 1 vs Trips RT. Weak-side drop. Will pressure, free safety over the top, man underneath.',
+      'rt', { rushers: DL.concat(['W']), routes: {
+        W: [[1.2, -4]], SS: [[1.5, -1.5]], FS: qtr,
+        LC: man, RC: man, N: man, M: [[0, 5]]
+      }}),
+    mkMC('Eagle 0', 'Blitz', 'Cover 0 vs Trips RT. Linebackers twist through the A gaps. Everybody else is man.',
+      'rt', { rushers: DL.concat(['W', 'M']), routes: {
+        W: [[2.4, -1], [1.2, -5]], M: [[-2.4, -1], [-1.2, -5]],
+        LC: man, RC: man, N: man, FS: man, SS: [[1, 3]]
+      }}),
+    mkMC('Magic 4', 'Blitz', 'Cover 4 vs Trips RT. Mike blitzes. Corners and safeties take the deep quarters.',
+      'rt', { rushers: DL.concat(['M']), routes: {
+        M: [[0.2, -5]], LC: [[-1, 12]], RC: [[1, 12]], FS: [[2, 10]], SS: [[-2, 10]],
+        N: [[-1.5, 5]], W: [[1, 5]]
+      }}),
+    mkMC('Nickle 3', 'Blitz', 'Cover 3 vs Trips RT. Nickel blitzes off the slot. Corners and free safety take the deep thirds.',
+      'rt', { rushers: DL.concat(['N']), routes: {
+        N: [[-3.5, -5]], LC: qtr, RC: qtr, FS: [[0, 10]], SS: [[2, 6]],
+        W: [[0, 4]], M: [[1, 5]]
+      }}),
+    mkMC('Smoke 0', 'Blitz', 'Cover 0 vs Trips LT. Free safety blitzes. Everybody else is man.',
+      'lt', { rushers: DL.concat(['FS']), routes: {
+        FS: [[1.2, -5]], LC: man, RC: man, N: man, SS: man, W: man, M: [[0, 3]]
+      }}),
+    mkMC('Wizard 4', 'Blitz', 'Cover 4 vs Trips RT. Will blitzes. Corners and safeties take the deep quarters.',
+      'rt', { rushers: DL.concat(['W']), routes: {
+        W: [[0.6, -5]], M: [[1, 5]], N: [[-1, 5]],
+        LC: qtr, RC: qtr, FS: [[2, 10]], SS: [[-2, 10]]
+      }}),
+    mkMC('Brown 4 vs Doubles', 'Zone', 'Cover 4 vs Doubles. Corners match the deep quarters. Nickel and Will sit curl-flat. Mike takes the mid hook.',
+      'dbl', { routes: {
+        LC: [[-1, 12]], RC: [[2, 6], [1, 12]], N: [[2, 4]], W: [[2.2, 4]],
+        M: [[0.4, 6]], FS: [[2, 8]], SS: [[3, 8]]
+      }}),
+    mkMC('Spear', 'Blitz', 'Cover 0 vs Trips. Safety blitz. Everybody else is man.',
+      'lt', { rushers: DL.concat(['FS']), routes: {
+        FS: [[0.4, -5]], LC: man, RC: man, N: man, SS: man, W: man, M: [[0, 3]]
+      }}),
+    mkMC('Smart', 'Man', '2 Man vs Trips RT. Five man under, safeties split the deep halves.',
+      'rt', { routes: {
+        LC: man, RC: man, N: man, W: man, M: man,
+        FS: [[-4, 12]], SS: [[4, 12]]
+      }}),
+    mkMC('Sky 2', 'Zone', 'Cover 2 vs Trips RT. Corners cloud the flats. Safeties split the deep halves. Nickel and Mike hook.',
+      'rt', { routes: {
+        LC: [[1.2, 2]], RC: [[-1.2, 2]], FS: [[-3, 12]], SS: [[3, 12]],
+        N: [[-1, 6]], M: [[0, 7]], W: [[2, 5]]
+      }}),
+    mkMC('Red 1 Robber', 'Man', 'Cover 1 Robber vs Trips LT. Free safety comes down as the robber. Strong safety deep.',
+      'lt', { routes: {
+        FS: [[-3, 4]], SS: [[2, 10]], LC: man, RC: man, N: man, W: man, M: [[0, 5]]
+      }}),
+    mkMC('Kobe', 'Zone', 'Cover 6 vs Trips RT. Cloud to the isolated side, quarters to the trips. Will and Nickel curl-hook.',
+      'rt', { routes: {
+        LC: [[1, 2]], SS: [[-3, 12]], FS: [[2, 10]], RC: [[1, 12]],
+        N: [[-1.2, 4]], W: [[2, 5]], M: [[0, 6]]
+      }}),
+    mkMC('Curry 3', 'Zone', 'Cover 3 vs Doubles RT Rip. Corners and free safety take the deep thirds. Will walls, Nickel sits seam-hook.',
+      'rip', { routes: {
+        LC: [[-1, 12]], RC: [[1, 12]], FS: [[0, 12]],
+        W: [[-2, 6]], M: [[0, 6]], N: [[1.5, 4]], SS: [[0.6, 2]]
+      }}),
+    mkMC('Brown 4 vs Trips RT', 'Zone', 'Cover 4 vs Trips RT. Corners carry the deep quarters. Nickel and free safety squeeze the trips. Will curl-flat.',
+      'rt', { routes: {
+        LC: qtr, RC: qtr, N: [[-2, 6]], FS: [[-2, 8]], SS: [[-2, 6]],
+        W: [[2, 4]], M: [[0, 6]]
+      }}),
+    mkMC('Black 1', 'Man', 'Cover 1 RAT vs Trips LT. Will is the rat. Free safety is the middle-of-the-field help. Everybody else is man.',
+      'lt', { routes: {
+        W: [[-1, 2]], FS: qtr, LC: man, RC: man, N: man, SS: man, M: man
+      }})
+  ];
+}
+
 function defenceStarters() {
   return [
     mkD('Cover 3 Buzz', 'Zone', 'Corners take the deep outside thirds, free safety has the middle, strong safety buzzes down.', {
@@ -408,7 +619,7 @@ function starters() {
       RB: [[505, 968], [452, 952], [548, 910], [640, 846], [656, 700]],
       QB: [[450, 968], [498, 978], [418, 1018]]
     }, ['TE', 'X', 'SL', 'Z'])
-  ].concat(defenceStarters());
+  ].concat(defenceStarters()).map(function (p) { p.folder = 'Samples'; return p; });
 }
 
 /* ---------------- state ---------------- */
@@ -418,14 +629,30 @@ function boot() {
   try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) { saved = null; }
   const ok = saved && Array.isArray(saved.plays) && saved.plays.length;
   const posOk = saved && POSITIONS.some(p => p.id === saved.pos);
-  const base = ok
-    ? { plays: saved.plays, currentId: saved.currentId, stats: saved.stats || {}, tol: saved.tol || 3, pos: posOk ? saved.pos : null }
-    : { plays: starters(), currentId: null, stats: {}, tol: 3, pos: posOk ? saved.pos : null };
-  if (!base.currentId && base.plays[0]) base.currentId = base.plays[0].id;
+  const plays = ensureTeamPacks(ok ? saved.plays : starters());
+  const base = {
+    plays: plays,
+    currentId: saved && saved.currentId,
+    stats: (saved && saved.stats) || {},
+    tol: (saved && saved.tol) || 3,
+    pos: posOk ? saved.pos : null
+  };
+  if (!base.currentId || !plays.some(p => p.id === base.currentId))
+    base.currentId = plays[0] ? plays[0].id : null;
   const pos = POSITIONS.find(p => p.id === base.pos);
   return Object.assign({ mode: 'practice', tool: 'move', sel: null, armed: null,
     sess: null, pane: 'list', style: 'guided', pick: null, loadMsg: '',
-    sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos }, base);
+    sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos,
+    dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all' }, base);
+}
+function folderOf(p) { return (p && p.folder) || 'My plays'; }
+function playFolders() {
+  const s = [];
+  S.plays.forEach(p => { const f = folderOf(p); if (s.indexOf(f) < 0) s.push(f); });
+  return s;
+}
+function ensureTeamPacks(plays) {
+  return plays.some(p => p.folder === FOLDER_MC) ? plays : plays.concat(maldenCatholic());
 }
 function save() {
   try {
@@ -482,6 +709,44 @@ function initField() {
   field.append(g);
 
   ['photo', 'hint', 'trail', 'token', 'live'].forEach(n => { L[n] = sv('g'); field.append(L[n]); });
+}
+function applyCam() {
+  const vw = W / cam.z, vh = H / cam.z;
+  cam.x = clamp(cam.x, 0, Math.max(0, W - vw));
+  cam.y = clamp(cam.y, 0, Math.max(0, H - vh));
+  field.setAttribute('viewBox', cam.x + ' ' + cam.y + ' ' + vw + ' ' + vh);
+}
+function clientToField(cx, cy) {
+  const pt = field.createSVGPoint();
+  pt.x = cx; pt.y = cy;
+  const m = field.getScreenCTM();
+  if (!m) return { x: 0, y: 0 };
+  const p = pt.matrixTransform(m.inverse());
+  return { x: p.x, y: p.y };
+}
+function beginZoom() {
+  const two = Array.from(screens.values()).slice(0, 2);
+  if (two.length < 2) return;
+  const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
+  act = { type: 'zoom',
+    d0: Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y)),
+    z0: cam.z, f0: clientToField(mid.x, mid.y) };
+}
+function zoomMove() {
+  const two = Array.from(screens.values()).slice(0, 2);
+  if (two.length < 2 || !act || act.type !== 'zoom') return;
+  const d = Math.max(1, Math.hypot(two[0].x - two[1].x, two[0].y - two[1].y));
+  cam.z = clamp(act.z0 * (d / act.d0), 1, 5);
+  applyCam();
+  const inv = field.getScreenCTM();
+  if (!inv) return;
+  const mid = { x: (two[0].x + two[1].x) / 2, y: (two[0].y + two[1].y) / 2 };
+  const p = field.createSVGPoint();
+  p.x = mid.x; p.y = mid.y;
+  const fMid = p.matrixTransform(inv.inverse());
+  cam.x += act.f0.x - fMid.x;
+  cam.y += act.f0.y - fMid.y;
+  applyCam();
 }
 
 const dOf = p => p.map((q, i) => (i ? 'L' : 'M') + q.x.toFixed(1) + ',' + q.y.toFixed(1)).join(' ');
@@ -561,6 +826,7 @@ function fitPhoto(play, iw, ih) {
 /* ---------------- render ---------------- */
 function render() {
   Object.keys(L).forEach(k => clr(L[k]));
+  document.body.classList.toggle('play-on', !!(S.sess || S.fieldMax));
   document.querySelectorAll('.tabs button').forEach(b =>
     b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
   if (!S.pos || S.pickingPos) {
@@ -570,12 +836,16 @@ function render() {
       const play = cur();
       if (play) paint(play, false);
       clr($('#dock'));
+      applyCam();
       return;
     }
+  } else if (S.loadingPlays) {
+    showLoad();
   } else {
     hideGate();
   }
   ({ practice: rPractice, study: rStudy, plays: rPlays })[S.mode]();
+  applyCam();
 }
 function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
 function paint(play, showRoutes) {
@@ -625,10 +895,82 @@ function hideGate() {
   g.hidden = true;
   clr(g);
 }
+function loadPlaysBtn(kind) {
+  const b = el('button', { class: kind || 'btn go' });
+  b.textContent = 'Load Plays';
+  b.onclick = () => { S.loadingPlays = true; render(); };
+  return b;
+}
+function folderChips(d) {
+  const books = playFolders();
+  if (books.length < 2) return;
+  const cs = el('div', { class: 'chips' });
+  [['all', 'All']].concat(books.map(b => [b, b])).forEach(o => {
+    const on = (S.bookFilter || 'all') === o[0];
+    const c = el('button', { class: 'chip', 'aria-pressed': String(on) });
+    c.textContent = o[1];
+    c.onclick = () => { S.bookFilter = o[0]; S.pick = null; render(); };
+    cs.append(c);
+  });
+  d.append(cs);
+}
+function showLoad() {
+  const g = $('#gate');
+  clr(g);
+  g.hidden = false;
+  const has = S.plays.some(p => p.folder === FOLDER_MC);
+  g.append(el('h2', { html: 'Load plays' }));
+  g.append(el('p', { class: 'lead', html: 'Load your team’s playbook, or bring in your own file.' }));
+
+  g.append(el('h3', { class: 'sec', html: 'Team playbooks' }));
+  const stack = el('div', { class: 'stack' });
+  const mc = el('button', { class: 'btn go' });
+  mc.textContent = has ? 'Reload Malden Catholic Defense' : 'Malden Catholic Defense';
+  mc.onclick = loadTeamMC;
+  stack.append(mc);
+  g.append(stack);
+  g.append(el('p', { class: 'hint', html: '19 calls from the 4-2-5 Hudl playbook.' }));
+
+  g.append(el('h3', { class: 'sec', html: 'Your files' }));
+  const files = el('div', { class: 'stack' });
+  const open = el('button', { class: 'btn' });
+  open.textContent = 'Open a playbook file';
+  open.onclick = () => { S.loadingPlays = false; pickFile(); };
+  const pics = el('button', { class: 'btn' });
+  pics.textContent = 'Upload pictures';
+  pics.onclick = () => { S.loadingPlays = false; S.mode = 'plays'; S.pane = 'upload'; render(); };
+  const typed = el('button', { class: 'btn' });
+  typed.textContent = 'Type plays in';
+  typed.onclick = () => { S.loadingPlays = false; S.mode = 'plays'; S.pane = 'type'; render(); };
+  files.append(open, pics, typed);
+  g.append(files);
+
+  const cancel = el('button', { class: 'btn ghost' });
+  cancel.textContent = 'Cancel';
+  cancel.onclick = () => { S.loadingPlays = false; render(); };
+  g.append(el('div', { class: 'bar' }, [cancel]));
+}
+function loadTeamMC() {
+  const kept = S.plays.filter(p => p.folder !== FOLDER_MC);
+  const pack = maldenCatholic();
+  S.plays = kept.concat(pack);
+  S.currentId = pack[0].id;
+  S.bookFilter = FOLDER_MC;
+  S.pick = null;
+  S.loadingPlays = false;
+  S.loadMsg = 'Loaded Malden Catholic Defense — 19 calls.';
+  const pos = currentPos();
+  if (pos && pos.side !== 'def') {
+    S.loadMsg += ' Change player to a defensive position to practice them.';
+  }
+  save();
+  render();
+}
 
 /* ===================== PRACTICE ===================== */
 function rPractice() {
   const d = $('#dock'); clr(d);
+  d.classList.remove('slim');
   if (!S.sess) return practiceSetup(d);
   practiceRun(d);
 }
@@ -642,14 +984,15 @@ function practiceSetup(d) {
   if (play) paint(play, false);
 
   if (!S.plays.length) {
-    d.append(el('p', { class: 'hint', html: 'No plays loaded. Open the Plays tab to draw one or paste a playbook in.' }));
-    const b = el('button', { class: 'btn go' }); b.textContent = 'Go to Plays';
-    b.onclick = () => { S.mode = 'plays'; render(); };
-    d.append(el('div', { class: 'bar' }, [b]));
+    d.append(el('p', { class: 'hint', html: 'No plays loaded. Use Load Plays to open your team’s playbook.' }));
+    d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
     return;
   }
 
   youBar(d);
+  d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+  folderChips(d);
+  if (S.loadMsg) d.append(el('p', { class: 'hint', html: S.loadMsg }));
 
   if (!pos) {
     d.append(el('h3', { class: 'sec', html: 'Which side of the ball?' }));
@@ -667,8 +1010,11 @@ function practiceSetup(d) {
   if (!S.pick) S.pick = shown.filter(p => myJobs(p).length).map(p => p.id);
   if (!shown.length) {
     d.append(el('p', { class: 'hint', html: pos
-      ? 'No plays with a ' + pos.name.toLowerCase() + ' assignment yet. Add one in the Plays tab.'
-      : 'No ' + (S.sideFilter === 'def' ? 'defensive' : 'offensive') + ' plays yet. Add one in the Plays tab.' }));
+      ? (pos.side === 'off' && S.plays.some(p => p.folder === FOLDER_MC)
+        ? 'Malden Catholic Defense is a defensive playbook. Change player to a defensive position to practice those calls, or add an offense play in the Plays tab.'
+        : 'No plays with a ' + pos.name.toLowerCase() + ' assignment yet. Use Load Plays, or add one in the Plays tab.')
+      : 'No ' + (S.sideFilter === 'def' ? 'defensive' : 'offensive') + ' plays yet. Use Load Plays to add some.' }));
+    d.append(el('div', { class: 'bar' }, [loadPlaysBtn('btn')]));
     return;
   }
   d.append(el('h3', { class: 'sec', html: pos ? 'Plays with your assignment' : 'Plays in this session' }));
@@ -729,6 +1075,8 @@ function visiblePlays() {
   const pos = currentPos();
   const f = pos ? pos.side : (S.sideFilter || 'both');
   let list = f === 'both' ? S.plays : S.plays.filter(p => sideOf(p) === f);
+  if (S.bookFilter && S.bookFilter !== 'all')
+    list = list.filter(p => folderOf(p) === S.bookFilter);
   if (pos) list = list.filter(p => myJobs(p).length);
   return list;
 }
@@ -741,6 +1089,7 @@ function startSession() {
   S.sess = { style: S.style, order: list, i: 0, tasks: [], t: 0, done: [],
     log: [], hint: 0, usedHint: false, result: null, trail: null,
     active: null, flash: false, showAnswer: false };
+  S.dockOpen = false;
   loadTasks();
   render();
 }
@@ -795,7 +1144,11 @@ function practiceRun(d) {
     });
   });
 
-  youBar(d);
+  const slim = !S.dockOpen;
+  const handle = el('button', { class: 'dock-handle', 'aria-label': slim ? 'Show menu' : 'Hide menu' });
+  handle.onclick = () => { S.dockOpen = slim; render(); };
+  d.append(handle);
+  if (slim) d.classList.add('slim'); else d.classList.remove('slim');
 
   // --- dock ---
   if (s.result) {
@@ -812,10 +1165,10 @@ function practiceRun(d) {
     const left = s.tasks.length - s.done.length;
     const job = sideOf(play) === 'def' ? 'assignment' : 'route';
     const cue = s.style === 'guided'
-      ? 'That is you. Put a finger on <b>' + (tgt ? tgt.label : '?') + '</b> and drag through your ' + job + '.'
-      : left + ' left. Press your player, then drag him through his ' + job + '.';
+      ? 'Drag <b>' + (tgt ? tgt.label : '?') + '</b> through your ' + job + '.'
+      : left + ' left. Press your player, then drag the ' + job + '.';
     d.append(el('div', { class: 'cue', html: cue }));
-    if (s.hint >= 1 && tgt && path) d.append(el('p', { class: 'hint',
+    if (!slim && s.hint >= 1 && tgt && path) d.append(el('p', { class: 'hint',
       html: describe(path, tgt.x, tgt.side === 'def') }));
   }
 
@@ -841,14 +1194,17 @@ function practiceRun(d) {
     bar.append(again, next);
   }
   const quit = el('button', { class: 'btn ghost warn' }); quit.textContent = 'End';
-  quit.onclick = () => { S.sess = null; render(); };
+  quit.onclick = () => { S.sess = null; S.dockOpen = false; render(); };
   bar.append(quit);
   d.append(bar);
 
-  if (s.log.length) {
-    const passed = s.log.filter(x => x.pass && !x.hint).length;
-    d.append(el('p', { class: 'hint',
-      html: passed + ' clean out of ' + s.log.length + ' so far.' }));
+  if (!slim) {
+    youBar(d);
+    if (s.log.length) {
+      const passed = s.log.filter(x => x.pass && !x.hint).length;
+      d.append(el('p', { class: 'hint',
+        html: passed + ' clean out of ' + s.log.length + ' so far.' }));
+    }
   }
 }
 
@@ -964,8 +1320,15 @@ function rStudy() {
   if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
 
   youBar(d);
+  d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+  folderChips(d);
+  const studyPlays = (pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays)
+    .filter(p => !S.bookFilter || S.bookFilter === 'all' || folderOf(p) === S.bookFilter);
+  if (play && studyPlays.length && studyPlays.indexOf(play) < 0) {
+    play = studyPlays[0];
+    S.currentId = play.id;
+  }
   const chips = el('div', { class: 'chips' });
-  const studyPlays = pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays;
   studyPlays.forEach(p => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
     c.textContent = p.name;
@@ -991,7 +1354,7 @@ function rStudy() {
     bar.append(pk);
   }
   const run = el('button', { class: 'btn go' }); run.textContent = 'Run the play';
-  run.onclick = () => animate(play);
+  run.onclick = () => { S.fieldMax = true; S.dockOpen = false; animate(play); render(); };
   const flip = el('button', { class: 'btn' }); flip.textContent = 'Flip sides';
   flip.onclick = () => { flipPlay(play); save(); render(); };
   bar.append(run, flip);
@@ -1125,18 +1488,23 @@ function rPlays() {
   });
   d.append(chips);
   youBar(d);
+  d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+  folderChips(d);
   if (S.saveErr) d.append(el('p', { class: 'hint', html: S.saveErr }));
+  if (S.loadMsg) d.append(el('p', { class: 'hint', html: S.loadMsg }));
   if (S.pane !== 'list' && play) { drawPhoto(play); paint(play, true); }
   if (S.pane === 'load')   return paneLoad(d);
   if (S.pane === 'upload') return paneUpload(d);
   if (S.pane === 'type')   return paneType(d);
 
   const ul = el('ul', { class: 'list' });
-  S.plays.forEach(p => {
+  const list = S.bookFilter && S.bookFilter !== 'all'
+    ? S.plays.filter(p => folderOf(p) === S.bookFilter) : S.plays;
+  list.forEach(p => {
     const li = el('li', { 'aria-current': String(p.id === S.currentId) }, [
       el('span', { class: 'nm', html: p.name }),
-      el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'Defense' : 'Offense' }),
-      el('span', { class: 'pill', html: runners(p).length })
+      el('span', { class: 'pill', html: folderOf(p) }),
+      el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'Defense' : 'Offense' })
     ]);
     li.onclick = () => { S.currentId = p.id; S.sel = null; save(); render(); };
     ul.append(li);
@@ -1436,10 +1804,11 @@ function paneLoad(d) {
   if (S.loadMsg) d.append(el('p', { class: 'hint', html: S.loadMsg }));
 
   d.append(el('h3', { class: 'sec', html: 'Start over' }));
-  const rs = el('button', { class: 'btn warn' }); rs.textContent = 'Reset to the four sample plays';
+  const rs = el('button', { class: 'btn warn' }); rs.textContent = 'Reset to samples + Malden Catholic';
   rs.onclick = () => {
-    S.plays = starters(); S.stats = {}; S.pick = null;
-    S.currentId = S.plays[0].id; S.loadMsg = 'Back to the samples.';
+    S.plays = starters().concat(maldenCatholic()); S.stats = {}; S.pick = null;
+    S.currentId = S.plays[0].id; S.bookFilter = 'all';
+    S.loadMsg = 'Back to the samples and Malden Catholic Defense.';
     save(); render();
   };
   d.append(el('div', { class: 'bar' }, [rs]));
@@ -1466,6 +1835,7 @@ function normalise(raw) {
       type: p.type || 'Pass',
       notes: p.notes || '',
       side: p.side === 'def' ? 'def' : 'off',
+      folder: p.folder ? String(p.folder) : undefined,
       img: typeof p.img === 'string' && p.img.slice(0, 5) === 'data:' ? p.img : undefined,
       imgT: p.imgT && isFinite(+p.imgT.w) ? { x: +p.imgT.x, y: +p.imgT.y, w: +p.imgT.w, h: +p.imgT.h } : undefined,
       imgOp: isFinite(+p.imgOp) ? +p.imgOp : undefined,
@@ -1498,7 +1868,8 @@ function ingest(text, replace) {
     S.plays = replace ? plays : S.plays.concat(plays);
     if (replace) S.stats = {};
     S.pick = null;
-    S.currentId = S.plays[0].id;
+    S.loadingPlays = false;
+    S.currentId = plays[0].id;
     S.loadMsg = 'Loaded ' + plays.length + ' play' + (plays.length === 1 ? '' : 's') + '.';
     save(); render();
   } catch (e) {
@@ -1536,15 +1907,23 @@ function toField(e) {
 }
 let act = null;
 const pointers = new Map();   // live fingers, so the picture can be pinched
+const screens = new Map();    // client coords for field pinch-zoom
 
 field.addEventListener('pointerdown', e => {
-  if (!S.pos || S.pickingPos) return;
+  if (!S.pos || S.pickingPos || S.loadingPlays) return;
   e.preventDefault();
+  screens.set(e.pointerId, { x: e.clientX, y: e.clientY });
   const pos = toField(e);
   pointers.set(e.pointerId, pos);
+  const photoTool = S.mode === 'plays' && S.pane === 'list' && S.tool === 'photo';
+  if (screens.size >= 2 && !photoTool) {
+    if (act && act.type === 'draw') { act = null; clr(L.live); }
+    beginZoom();
+    return;
+  }
   const hit = e.target.closest('[data-pid]');
   const pid = hit ? hit.getAttribute('data-pid') : null;
-  if (S.mode === 'plays' && S.pane === 'list' && S.tool === 'photo') return photoDown(e, pos);
+  if (photoTool) return photoDown(e, pos);
   if (S.mode === 'plays' && S.pane === 'list') return editDown(e, pos, pid);
   if (S.mode === 'practice' && S.sess) return runDown(e, pos, pid);
 });
@@ -1586,9 +1965,11 @@ function photoMove() {
 }
 
 field.addEventListener('pointermove', e => {
+  if (screens.has(e.pointerId)) screens.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (!act) return;
   const pos = toField(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, pos);
+  if (act.type === 'zoom') { zoomMove(); return; }
   if (act.type === 'photo') { photoMove(); return; }
   if (act.type === 'drag') {
     act.p.x = pos.x + act.dx; act.p.y = pos.y + act.dy;
@@ -1609,7 +1990,12 @@ field.addEventListener('pointermove', e => {
 
 field.addEventListener('pointerup', e => {
   pointers.delete(e.pointerId);
+  screens.delete(e.pointerId);
   if (!act) return;
+  if (act.type === 'zoom') {
+    if (screens.size < 2) act = null;
+    return;
+  }
   if (act.type === 'photo') { act = null; save(); render(); return; }
   const a = act; act = null;
   try { field.releasePointerCapture(e.pointerId); } catch (err) {}
@@ -1631,6 +2017,7 @@ field.addEventListener('pointerup', e => {
 });
 field.addEventListener('pointercancel', e => {
   pointers.delete(e.pointerId);
+  screens.delete(e.pointerId);
   act = null; clr(L.live); render();
 });
 
@@ -1706,9 +2093,29 @@ document.querySelectorAll('.tabs button').forEach(b => {
   };
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { S.sel = null; S.armed = null; act = null; clr(L.live); render(); }
+  if (e.key === 'Escape') {
+    if (S.loadingPlays) { S.loadingPlays = false; render(); return; }
+    S.sel = null; S.armed = null; act = null; clr(L.live); render();
+  }
 });
 document.addEventListener('gesturestart', e => e.preventDefault());
+$('#fieldwrap').addEventListener('wheel', e => {
+  e.preventDefault();
+  const z0 = cam.z;
+  const z = clamp(z0 * (e.deltaY > 0 ? 0.9 : 1.1), 1, 5);
+  if (z === z0) return;
+  const f0 = clientToField(e.clientX, e.clientY);
+  cam.z = z;
+  applyCam();
+  const m = field.getScreenCTM();
+  if (!m) return;
+  const p = field.createSVGPoint();
+  p.x = e.clientX; p.y = e.clientY;
+  const fMid = p.matrixTransform(m.inverse());
+  cam.x += f0.x - fMid.x;
+  cam.y += f0.y - fMid.y;
+  applyCam();
+}, { passive: false });
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(function () {});
