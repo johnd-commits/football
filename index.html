@@ -99,6 +99,17 @@
   .pulse{animation:pulse 1.2s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.2}50%{opacity:.95}}
   @media (prefers-reduced-motion:reduce){.pulse{animation:none;opacity:.65}}
+  #gate{
+    position:fixed;inset:0;z-index:40;background:var(--ink);
+    padding:max(18px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom));
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+  }
+  #gate h2{font-size:28px;margin:10px 0 6px}
+  #gate .lead{color:var(--muted);margin:0 0 18px;font-size:15.5px}
+  #gate .posgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px}
+  #gate .posgrid button{min-height:54px;width:100%}
+  .you{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .you b{flex:1;min-width:0}
   @media (min-width:900px){
     body{flex-direction:row}
     header{position:fixed;top:0;left:0;right:404px;z-index:5;background:var(--ink)}
@@ -118,6 +129,7 @@
 </header>
 <div id="fieldwrap"><svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg></div>
 <div id="dock"></div>
+<div id="gate" hidden></div>
 
 <script>
 /* =====================================================================
@@ -129,6 +141,76 @@
 
 const KEY = 'playbook.trainer.v2';
 const W = 900, H = 1100, LOS = 880, YARD = 18, R = 21;
+
+const POSITIONS = [
+  { id: 'qb', name: 'Quarterback', group: 'Offense', side: 'off', labels: ['QB', 'Q'] },
+  { id: 'rb', name: 'Running back', group: 'Offense', side: 'off', labels: ['RB', 'FB', 'A'] },
+  { id: 'wr', name: 'Wide receiver', group: 'Offense', side: 'off', labels: ['WR', 'X', 'Z', 'SL', 'X2'] },
+  { id: 'te', name: 'Tight end', group: 'Offense', side: 'off', labels: ['TE', 'F', 'H'] },
+  { id: 'ol', name: 'Offensive line', group: 'Offense', side: 'off', labels: ['LT', 'LG', 'C', 'RG', 'RT', 'OL'] },
+  { id: 'de', name: 'Defensive end', group: 'Defense', side: 'def', labels: ['LE', 'RE', 'DE'] },
+  { id: 'dt', name: 'Defensive tackle', group: 'Defense', side: 'def', labels: ['DT', 'NT', 'T'] },
+  { id: 'lb', name: 'Linebacker', group: 'Defense', side: 'def', labels: ['W', 'M', 'S', 'LB'] },
+  { id: 'nb', name: 'Nickel', group: 'Defense', side: 'def', labels: ['NB', 'N'] },
+  { id: 'cb', name: 'Cornerback', group: 'Defense', side: 'def', labels: ['LC', 'RC', 'CB'] },
+  { id: 'sfty', name: 'Safety', group: 'Defense', side: 'def', labels: ['FS', 'SS'] }
+];
+const currentPos = () => POSITIONS.find(p => p.id === S.pos) || null;
+function isMyPlayer(p) {
+  const pos = currentPos();
+  if (!pos || !p || p.scout) return false;
+  const lab = String(p.label || '').toUpperCase();
+  const id = String(p.id || '').toUpperCase();
+  return pos.labels.some(l => l.toUpperCase() === lab || l.toUpperCase() === id);
+}
+function jobOf(p) {
+  if (!p) return null;
+  if (p.route && p.route.length > 1) return p.route;
+  if (p.block) {
+    const dir = p.y < LOS ? 1 : -1;
+    return [{ x: p.x, y: p.y }, { x: p.x, y: p.y + dir * 3 * YARD }];
+  }
+  return null;
+}
+function myJobs(play) {
+  if (!play) return [];
+  if (!currentPos()) return runners(play);
+  return play.players.filter(p => isMyPlayer(p) && jobOf(p));
+}
+function setPos(id) {
+  S.pos = id;
+  S.pickingPos = false;
+  S.sess = null;
+  const p = currentPos();
+  S.sideFilter = p ? p.side : 'both';
+  S.style = 'guided';
+  S.pick = S.plays.filter(pl => (p ? sideOf(pl) === p.side : true) && myJobs(pl).length).map(pl => pl.id);
+  if (p) {
+    const next = S.plays.find(pl => sideOf(pl) === p.side && myJobs(pl).length);
+    if (next) S.currentId = next.id;
+  }
+  save();
+  render();
+}
+function openPosPicker() {
+  S.pickingPos = true;
+  S.sess = null;
+  render();
+}
+function changePlayerBtn() {
+  const b = el('button', { class: 'btn ghost' });
+  b.textContent = 'Change player';
+  b.onclick = openPosPicker;
+  return b;
+}
+function youBar(d) {
+  const p = currentPos();
+  if (!p) return;
+  d.append(el('div', { class: 'you' }, [
+    el('b', { html: 'You are the ' + p.name.toLowerCase() + '.' }),
+    changePlayerBtn()
+  ]));
+}
 
 /* ---------------- helpers ---------------- */
 const $ = s => document.querySelector(s);
@@ -335,18 +417,20 @@ function boot() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) { saved = null; }
   const ok = saved && Array.isArray(saved.plays) && saved.plays.length;
+  const posOk = saved && POSITIONS.some(p => p.id === saved.pos);
   const base = ok
-    ? { plays: saved.plays, currentId: saved.currentId, stats: saved.stats || {}, tol: saved.tol || 3 }
-    : { plays: starters(), currentId: null, stats: {}, tol: 3 };
+    ? { plays: saved.plays, currentId: saved.currentId, stats: saved.stats || {}, tol: saved.tol || 3, pos: posOk ? saved.pos : null }
+    : { plays: starters(), currentId: null, stats: {}, tol: 3, pos: posOk ? saved.pos : null };
   if (!base.currentId && base.plays[0]) base.currentId = base.plays[0].id;
+  const pos = POSITIONS.find(p => p.id === base.pos);
   return Object.assign({ mode: 'practice', tool: 'move', sel: null, armed: null,
     sess: null, pane: 'list', style: 'guided', pick: null, loadMsg: '',
-    sideFilter: 'both', upSide: 'off', saveErr: '' }, base);
+    sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos }, base);
 }
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(
-      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol }));
+      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos }));
     S.saveErr = '';
   } catch (e) {
     S.saveErr = 'This browser is out of room. Remove a play picture or two — once a play is traced the picture is just a reference.';
@@ -479,15 +563,67 @@ function render() {
   Object.keys(L).forEach(k => clr(L[k]));
   document.querySelectorAll('.tabs button').forEach(b =>
     b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
+  if (!S.pos || S.pickingPos) {
+    showGate();
+    if (!S.pos) {
+      head('Playbook Trainer', 'What position do you play?');
+      const play = cur();
+      if (play) paint(play, false);
+      clr($('#dock'));
+      return;
+    }
+  } else {
+    hideGate();
+  }
   ({ practice: rPractice, study: rStudy, plays: rPlays })[S.mode]();
 }
 function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
 function paint(play, showRoutes) {
   play.players.forEach(p => {
-    if (showRoutes && p.route) line(L.trail, p.route, { color: '#f2c230', arrow: 'm-live' });
+    const mine = isMyPlayer(p);
+    if (showRoutes && p.route) line(L.trail, p.route, {
+      color: '#f2c230', arrow: 'm-live',
+      op: !S.pos || mine ? 1 : 0.22, w: mine ? 6 : 4
+    });
     if (showRoutes && p.block) blockMark(L.trail, p);
   });
-  play.players.forEach(p => token(L.token, p));
+  play.players.forEach(p => {
+    const mine = isMyPlayer(p);
+    token(L.token, p, {
+      ring: mine ? '#f2c230' : null,
+      op: p.scout ? 0.4 : (!S.pos || mine ? 1 : 0.4)
+    });
+  });
+}
+function showGate() {
+  const g = $('#gate');
+  clr(g);
+  g.hidden = false;
+  const p0 = currentPos();
+  g.append(el('h2', { html: p0 ? 'Change player' : 'What position do you play?' }));
+  g.append(el('p', { class: 'lead', html: 'The app will only ask you to run <b>your</b> assignment on each play.' }));
+  ['Offense', 'Defense'].forEach(group => {
+    g.append(el('h3', { class: 'sec', html: group }));
+    const grid = el('div', { class: 'posgrid' });
+    POSITIONS.filter(p => p.group === group).forEach(p => {
+      const b = el('button', { class: 'btn' + (p0 && p0.id === p.id ? ' go' : ''), 'aria-pressed': String(!!p0 && p0.id === p.id) });
+      b.textContent = p.name;
+      b.onclick = () => setPos(p.id);
+      grid.append(b);
+    });
+    g.append(grid);
+  });
+  if (p0) {
+    const cancel = el('button', { class: 'btn ghost' });
+    cancel.textContent = 'Keep ' + p0.name.toLowerCase();
+    cancel.onclick = () => { S.pickingPos = false; render(); };
+    g.append(el('div', { class: 'bar' }, [cancel]));
+  }
+}
+function hideGate() {
+  const g = $('#gate');
+  g.hidden = true;
+  clr(g);
 }
 
 /* ===================== PRACTICE ===================== */
@@ -498,7 +634,10 @@ function rPractice() {
 }
 
 function practiceSetup(d) {
-  head('Practice', 'Pick the plays, then run each route with a finger.');
+  const pos = currentPos();
+  head('Practice', pos
+    ? pos.name + ' — pick plays, then run your assignment.'
+    : 'Pick the plays, then run each route with a finger.');
   const play = cur();
   if (play) paint(play, false);
 
@@ -510,32 +649,38 @@ function practiceSetup(d) {
     return;
   }
 
-  d.append(el('h3', { class: 'sec', html: 'Which side of the ball?' }));
-  const cs = el('div', { class: 'chips' });
-  [['both', 'Both'], ['off', 'Offense'], ['def', 'Defense']].forEach(o => {
-    const c = el('button', { class: 'chip', 'aria-pressed': String(S.sideFilter === o[0]) });
-    c.textContent = o[1];
-    c.onclick = () => { S.sideFilter = o[0]; render(); };
-    cs.append(c);
-  });
-  d.append(cs);
+  youBar(d);
+
+  if (!pos) {
+    d.append(el('h3', { class: 'sec', html: 'Which side of the ball?' }));
+    const cs = el('div', { class: 'chips' });
+    [['both', 'Both'], ['off', 'Offense'], ['def', 'Defense']].forEach(o => {
+      const c = el('button', { class: 'chip', 'aria-pressed': String(S.sideFilter === o[0]) });
+      c.textContent = o[1];
+      c.onclick = () => { S.sideFilter = o[0]; render(); };
+      cs.append(c);
+    });
+    d.append(cs);
+  }
 
   const shown = visiblePlays();
-  if (!S.pick) S.pick = S.plays.map(p => p.id);
+  if (!S.pick) S.pick = shown.filter(p => myJobs(p).length).map(p => p.id);
   if (!shown.length) {
-    d.append(el('p', { class: 'hint', html: 'No ' +
-      (S.sideFilter === 'def' ? 'defensive' : 'offensive') + ' plays yet. Add one in the Plays tab.' }));
+    d.append(el('p', { class: 'hint', html: pos
+      ? 'No plays with a ' + pos.name.toLowerCase() + ' assignment yet. Add one in the Plays tab.'
+      : 'No ' + (S.sideFilter === 'def' ? 'defensive' : 'offensive') + ' plays yet. Add one in the Plays tab.' }));
     return;
   }
-  d.append(el('h3', { class: 'sec', html: 'Plays in this session' }));
+  d.append(el('h3', { class: 'sec', html: pos ? 'Plays with your assignment' : 'Plays in this session' }));
   const ul = el('ul', { class: 'list' });
   shown.forEach(p => {
     const on = S.pick.indexOf(p.id) >= 0;
     const st = S.stats[p.id] || {};
+    const jobs = myJobs(p);
     const li = el('li', {}, [
       el('span', { class: 'box' + (on ? ' on' : ''), html: on ? '&check;' : '' }),
       el('span', { class: 'nm', html: p.name }),
-      el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'D' : 'O' }),
+      el('span', { class: 'pill', html: jobs.length ? jobs.map(j => j.label).join(' ') : (sideOf(p) === 'def' ? 'D' : 'O') }),
       el('span', { class: 'pill' + (st.learned ? ' on' : st.passes ? ' part' : ''),
         html: st.learned ? 'Learned' : st.passes ? 'streak ' + (st.streak || 0) : 'New' })
     ]);
@@ -557,15 +702,19 @@ function practiceSetup(d) {
   });
   d.append(c1);
 
-  d.append(el('h3', { class: 'sec', html: 'Who gets asked' }));
-  const c2 = el('div', { class: 'chips' });
-  [['guided', 'One player at a time'], ['free', 'He picks the player']].forEach(o => {
-    const c = el('button', { class: 'chip', 'aria-pressed': String(S.style === o[0]) });
-    c.textContent = o[1];
-    c.onclick = () => { S.style = o[0]; render(); };
-    c2.append(c);
-  });
-  d.append(c2);
+  if (pos) {
+    d.append(el('p', { class: 'hint', html: 'You will only run the ' + pos.name.toLowerCase() + ' on each play.' }));
+  } else {
+    d.append(el('h3', { class: 'sec', html: 'Who gets asked' }));
+    const c2 = el('div', { class: 'chips' });
+    [['guided', 'One player at a time'], ['free', 'He picks the player']].forEach(o => {
+      const c = el('button', { class: 'chip', 'aria-pressed': String(S.style === o[0]) });
+      c.textContent = o[1];
+      c.onclick = () => { S.style = o[0]; render(); };
+      c2.append(c);
+    });
+    d.append(c2);
+  }
 
   const go = el('button', { class: 'btn go' });
   go.textContent = 'Start practice';
@@ -577,11 +726,14 @@ function practiceSetup(d) {
 function shuffle(a) { return a.slice().sort(() => Math.random() - .5); }
 const sideOf = p => p.side === 'def' ? 'def' : 'off';
 function visiblePlays() {
-  const f = S.sideFilter || 'both';
-  return f === 'both' ? S.plays : S.plays.filter(p => sideOf(p) === f);
+  const pos = currentPos();
+  const f = pos ? pos.side : (S.sideFilter || 'both');
+  let list = f === 'both' ? S.plays : S.plays.filter(p => sideOf(p) === f);
+  if (pos) list = list.filter(p => myJobs(p).length);
+  return list;
 }
 function sessionPlays() {
-  return visiblePlays().filter(p => (S.pick || []).indexOf(p.id) >= 0 && runners(p).length);
+  return visiblePlays().filter(p => (S.pick || []).indexOf(p.id) >= 0 && myJobs(p).length);
 }
 
 function startSession() {
@@ -595,7 +747,7 @@ function startSession() {
 function sessPlay() { return S.sess.order[S.sess.i]; }
 function loadTasks() {
   const s = S.sess;
-  s.tasks = shuffle(runners(sessPlay()).map(p => p.id));
+  s.tasks = shuffle(myJobs(sessPlay()).map(p => p.id));
   s.t = 0; s.done = []; s.hint = 0; s.usedHint = false;
   s.result = null; s.trail = null; s.active = null; s.showAnswer = false;
 }
@@ -607,38 +759,43 @@ function target() {
 
 function practiceRun(d) {
   const s = S.sess, play = sessPlay(), tgt = target();
+  const pos = currentPos();
+  const path = jobOf(tgt);
   head(play.name, 'Play ' + (s.i + 1) + ' of ' + s.order.length + ' \u00b7 ' +
-    (sideOf(play) === 'def' ? 'Defense' : 'Offense') + ' \u00b7 ' + play.type);
+    (pos ? pos.name : (sideOf(play) === 'def' ? 'Defense' : 'Offense')) + ' \u00b7 ' + play.type);
 
   // --- hints and answer on the field ---
-  if (tgt) {
+  if (tgt && path) {
     if (s.hint >= 3 || s.showAnswer) {
-      line(L.hint, tgt.route, { color: '#5fb0f0', dash: '12 9', op: .9, arrow: 'm-ans' });
+      line(L.hint, path, { color: '#5fb0f0', dash: '12 9', op: .9, arrow: 'm-ans' });
     } else if (s.hint === 2 && s.flash) {
-      line(L.hint, tgt.route, { color: '#5fb0f0', dash: '12 9', op: .9, arrow: 'm-ans' });
+      line(L.hint, path, { color: '#5fb0f0', dash: '12 9', op: .9, arrow: 'm-ans' });
     } else if (s.hint === 1) {
-      line(L.hint, resample(tgt.route, 20).slice(0, 5),
+      line(L.hint, resample(path, 20).slice(0, 5),
         { color: '#5fb0f0', dash: '10 8', op: .85, arrow: 'm-ans' });
     }
   }
   // --- routes already completed this play ---
   s.done.forEach(id => {
     const p = play.players.find(x => x.id === id);
-    if (p) line(L.trail, p.route, { color: '#4fd189', op: .5, w: 4, arrow: 'm-pass' });
+    const donePath = jobOf(p);
+    if (p && donePath) line(L.trail, donePath, { color: '#4fd189', op: .5, w: 4, arrow: 'm-pass' });
   });
-  if (s.trail && tgt) paintTrail(L.trail, s.trail, tgt.route);
+  if (s.trail && tgt && path) paintTrail(L.trail, s.trail, path);
 
   play.players.forEach(p => {
     const isT = tgt && p.id === tgt.id;
     const doneAlready = s.done.indexOf(p.id) >= 0;
     const askable = s.tasks.indexOf(p.id) >= 0 && !doneAlready;
     token(L.token, p, {
-      ring: isT ? '#f2c230' : doneAlready ? '#4fd189' : null,
+      ring: isT ? '#f2c230' : doneAlready ? '#4fd189' : (isMyPlayer(p) ? '#f2c230' : null),
       pulse: isT && !s.result,
       op: s.style === 'guided' ? (isT || doneAlready ? 1 : .45)
                                : (askable || doneAlready ? 1 : .45)
     });
   });
+
+  youBar(d);
 
   // --- dock ---
   if (s.result) {
@@ -655,11 +812,11 @@ function practiceRun(d) {
     const left = s.tasks.length - s.done.length;
     const job = sideOf(play) === 'def' ? 'assignment' : 'route';
     const cue = s.style === 'guided'
-      ? 'Put a finger on <b>' + (tgt ? tgt.label : '?') + '</b> and drag him through his ' + job + '.'
-      : left + ' left. Press the player you want, then drag him through his ' + job + '.';
+      ? 'That is you. Put a finger on <b>' + (tgt ? tgt.label : '?') + '</b> and drag through your ' + job + '.'
+      : left + ' left. Press your player, then drag him through his ' + job + '.';
     d.append(el('div', { class: 'cue', html: cue }));
-    if (s.hint >= 1 && tgt) d.append(el('p', { class: 'hint',
-      html: describe(tgt.route, tgt.x, tgt.side === 'def') }));
+    if (s.hint >= 1 && tgt && path) d.append(el('p', { class: 'hint',
+      html: describe(path, tgt.x, tgt.side === 'def') }));
   }
 
   const bar = el('div', { class: 'bar' });
@@ -762,7 +919,8 @@ function finish() {
   const d = $('#dock'); clr(d);
   const clean = log.filter(x => x.pass && !x.hint).length;
   const pct = Math.round(clean / (log.length || 1) * 100);
-  head('Session done', clean + ' of ' + log.length + ' clean');
+  head('Session done', (currentPos() ? currentPos().name + ' · ' : '') + clean + ' of ' + log.length + ' clean');
+  youBar(d);
   d.append(el('div', { class: 'banner' }, [
     el('span', { class: 'verdict ' + (pct >= 80 ? 'pass' : pct >= 50 ? 'help' : 'fail'), html: pct + '%' }),
     el('div', { class: 'why', html: clean + ' routes run clean<small>' +
@@ -794,12 +952,21 @@ function finish() {
 let anim = null;
 function rStudy() {
   const d = $('#dock'); clr(d);
-  const play = cur();
-  head(play ? play.name : 'Study', play ? (play.notes || play.type) : 'Nothing loaded');
+  const pos = currentPos();
+  let play = cur();
+  if (pos && play && sideOf(play) !== pos.side) {
+    play = S.plays.find(p => sideOf(p) === pos.side) || play;
+    if (play) S.currentId = play.id;
+  }
+  head(play ? play.name : 'Study', play
+    ? ((pos ? pos.name + ' · ' : '') + (play.notes || play.type))
+    : 'Nothing loaded');
   if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
 
+  youBar(d);
   const chips = el('div', { class: 'chips' });
-  S.plays.forEach(p => {
+  const studyPlays = pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays;
+  studyPlays.forEach(p => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
     c.textContent = p.name;
     c.onclick = () => { S.currentId = p.id; save(); render(); };
@@ -808,6 +975,13 @@ function rStudy() {
   d.append(chips);
   if (play.img && S.peek) drawPhoto(play);
   paint(play, true);
+
+  const jobs = myJobs(play);
+  if (pos) {
+    d.append(el('p', { class: 'hint', html: jobs.length
+      ? 'Your assignment' + (jobs.length === 1 ? '' : 's') + ': <b>' + jobs.map(p => p.label).join(', ') + '</b>.'
+      : 'You do not have an assignment on this play. Pick another, or change player.' }));
+  }
 
   const bar = el('div', { class: 'bar' });
   if (play.img) {
@@ -841,12 +1015,19 @@ function animate(play) {
     play.players.forEach(p => { if (p.block) blockMark(L.trail, p); });
     movers.forEach(m => {
       const n = Math.max(2, Math.round(t * (m.pts.length - 1)) + 1);
-      line(L.trail, m.pts.slice(0, n), { color: '#f2c230', arrow: t >= 1 ? 'm-live' : null });
+      const mine = isMyPlayer(m.p);
+      line(L.trail, m.pts.slice(0, n), {
+        color: '#f2c230', arrow: t >= 1 ? 'm-live' : null,
+        op: !S.pos || mine ? 1 : 0.25, w: mine ? 6 : 4
+      });
     });
     play.players.forEach(p => {
       const m = movers.find(q => q.p.id === p.id);
       const at = m ? m.pts[Math.round(t * (m.pts.length - 1))] : p;
-      token(L.token, Object.assign({}, p, { x: at.x, y: at.y }));
+      token(L.token, Object.assign({}, p, { x: at.x, y: at.y }), {
+        ring: isMyPlayer(p) ? '#f2c230' : null,
+        op: p.scout ? 0.4 : (!S.pos || isMyPlayer(p) ? 1 : 0.4)
+      });
     });
     anim = t < 1 ? requestAnimationFrame(step) : null;
   };
@@ -943,6 +1124,7 @@ function rPlays() {
     chips.append(c);
   });
   d.append(chips);
+  youBar(d);
   if (S.saveErr) d.append(el('p', { class: 'hint', html: S.saveErr }));
   if (S.pane !== 'list' && play) { drawPhoto(play); paint(play, true); }
   if (S.pane === 'load')   return paneLoad(d);
@@ -1356,6 +1538,7 @@ let act = null;
 const pointers = new Map();   // live fingers, so the picture can be pinched
 
 field.addEventListener('pointerdown', e => {
+  if (!S.pos || S.pickingPos) return;
   e.preventDefault();
   const pos = toField(e);
   pointers.set(e.pointerId, pos);
@@ -1417,7 +1600,7 @@ field.addEventListener('pointermove', e => {
   act.pts.push(pos);
   clr(L.live);
   if (act.mode === 'run') {
-    paintTrail(L.live, act.pts, act.p.route);
+    paintTrail(L.live, act.pts, act.path || act.p.route);
     token(L.live, Object.assign({}, act.p, { x: pos.x, y: pos.y }), { stroke: '#f2c230' });
   } else {
     line(L.live, act.pts, { color: '#f2c230', w: 5 });
@@ -1437,7 +1620,7 @@ field.addEventListener('pointerup', e => {
       else {
         const s = S.sess;
         s.trail = a.pts;
-        s.result = judge(a.pts, a.p.route, tolPx());
+        s.result = judge(a.pts, a.path || a.p.route, tolPx());
         if (!s.result.pass) s.showAnswer = true;
       }
     } else if (a.mode === 'run') {
@@ -1496,13 +1679,15 @@ function runDown(e, pos, pid) {
     if (!p) return;
     if (s.done.indexOf(pid) >= 0) { bump(p.label + ' is already done.'); return; }
     if (s.tasks.indexOf(pid) < 0) {
-      bump(p.scout ? 'That is the offense. Pick a defender.'
-                   : p.label + ' has no assignment here — he rushes or blocks.');
+      const pos = currentPos();
+      bump(p.scout ? 'That is the other side of the ball. Pick your player.'
+                   : pos ? 'That is not the ' + pos.name.toLowerCase() + '. Start on your player.'
+                         : p.label + ' has no assignment here — he rushes or blocks.');
       return;
     }
     s.active = pid;
   }
-  act = { type: 'draw', mode: 'run', p: p, pts: [{ x: p.x, y: p.y }] };
+  act = { type: 'draw', mode: 'run', p: p, pts: [{ x: p.x, y: p.y }], path: jobOf(p) };
   try { field.setPointerCapture(e.pointerId); } catch (err) {}
   render();
 }
