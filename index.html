@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Playbook">
+<meta name="apple-mobile-web-app-title" content="HardWorkIQ">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0a1628">
-<meta name="description" content="Learn football routes by tracing them with a finger.">
-<title>Playbook Trainer</title>
+<meta name="theme-color" content="#101b23">
+<meta name="description" content="HardWorkIQ — learn your team's plays by tracing them with a finger.">
+<title>HardWorkIQ</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/hardworkiq.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
   :root{
@@ -33,24 +33,27 @@
   }
   h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
 
-  header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);flex:none;position:relative;z-index:8;min-height:64px}
-  header .title{flex:1;min-width:0;max-width:min(36vw, 280px);position:relative;z-index:1}
+  header{
+    display:flex;align-items:center;gap:8px;padding:10px 12px;
+    border-bottom:1px solid var(--line);flex:none;position:relative;z-index:8;min-height:56px;
+  }
+  header .title{flex:1;min-width:0;max-width:none}
   header .title b{display:block;font-size:16px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   header .title span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #back{
-    flex:none;min-width:58px;min-height:44px;padding:0 10px;font-size:14px;position:relative;z-index:1;
+    flex:none;min-width:58px;min-height:44px;padding:0 10px;font-size:14px;
   }
   .tabs{
-    position:absolute;left:50%;transform:translateX(-50%);
-    display:flex;gap:6px;background:var(--ink-2);padding:5px;border-radius:14px;flex:none;z-index:2;
+    display:flex;gap:6px;background:var(--ink-2);padding:5px;border-radius:14px;
+    flex:none;margin-left:auto;min-width:0;
   }
   .tabs button{
     border:0;background:none;color:var(--muted);font:inherit;font-weight:750;font-size:16px;
-    padding:10px 22px;border-radius:10px;cursor:pointer;min-height:44px;min-width:108px;
+    padding:10px 18px;border-radius:10px;cursor:pointer;min-height:44px;min-width:0;
   }
   .tabs button[aria-selected="true"]{background:var(--marker);color:#2a2109}
 
-  #fieldwrap{flex:1;min-height:38vh;position:relative;display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;touch-action:none}
+  #fieldwrap{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;touch-action:none}
   svg#field{width:100%;height:100%;touch-action:none;display:block}
   #view3d{
     display:none;position:absolute;inset:0;width:100%;height:100%;
@@ -104,15 +107,30 @@
     font-size:13px;font-weight:800;
   }
   body.view-3d #zoom{bottom:12px}
+  #viewmode{
+    position:absolute;right:10px;top:10px;z-index:6;pointer-events:none;
+  }
+  #viewmode[hidden]{display:none !important}
+  #viewmode .chips{margin:0;padding:0;overflow:visible;pointer-events:auto;justify-content:flex-end}
+  #viewmode .chip{
+    background:rgba(16,27,35,.88);padding:7px 11px;font-size:12px;font-weight:800;
+  }
 
   #split{display:none}
-  #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:40vh;overflow-y:auto}
+  #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:8px 12px 12px;max-height:42vh;overflow-y:auto}
+  #dock.slim{max-height:none;overflow:visible;padding:4px 12px 10px}
+  #dock.slim .you{margin-bottom:4px}
+  #dock.slim .bar{margin-top:6px}
+  #dock.slim .chips{margin-bottom:4px}
+  #dock .dock-more{display:none}
+  #dock.expanded .dock-more{display:block}
   .dock-handle{
-    display:block;width:42px;height:5px;margin:0 auto 8px;border:0;padding:10px 0 8px;
-    background:transparent;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    width:100%;min-height:28px;margin:0 0 6px;border:0;padding:4px 0 2px;
+    background:transparent;cursor:pointer;color:var(--muted);font:inherit;font-size:12px;font-weight:700;
   }
   .dock-handle::before{
-    content:"";display:block;width:42px;height:5px;margin:0 auto;border-radius:99px;background:var(--line);
+    content:"";display:block;width:42px;height:5px;border-radius:99px;background:var(--line);
   }
   body.play-on header{padding:8px 12px}
   body.play-on header .title span{display:none}
@@ -210,44 +228,90 @@
   }
   body.brand-on header .brand-mark{display:block}
   body.brand-on header .title{display:none}
-  @media (max-width:520px){
-    header .title{max-width:72px}
+  @media (max-width:899px){
+    header{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      grid-template-areas:"back tabs tabs" "title title account";
+      align-items:center;gap:6px 8px;padding:8px 10px;min-height:0;
+    }
+    #back{grid-area:back;min-width:52px;padding:0 8px}
+    .tabs{
+      grid-area:tabs;margin-left:0;width:100%;justify-content:stretch;
+      gap:3px;padding:4px;
+    }
+    .tabs button{flex:1;padding:8px 6px;font-size:13px;min-height:40px}
+    header .title{grid-area:title;max-width:none}
+    header .title b{font-size:17px}
     header .title span{display:none}
-    .tabs{gap:3px;padding:4px}
-    .tabs button{padding:9px 12px;font-size:14px;min-width:0;min-height:42px}
-    #back{min-width:52px;padding:0 8px}
-    body.brand-on header .brand-mark{height:30px;max-width:min(38vw, 150px)}
+    .account{grid-area:account}
+    header .brand-mark{grid-area:title;height:30px;max-width:min(38vw, 150px)}
+    #zoom .btn{min-width:72px;min-height:40px;font-size:12px;padding:0 8px}
   }
+  .account{
+    flex:none;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+    background:var(--ink-2);border:1px solid var(--line);border-radius:10px;
+    padding:5px 10px;color:var(--chalk);cursor:pointer;min-height:44px;margin-left:8px;
+  }
+  .account b{font-size:13px;max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .account span{font-size:11px;color:var(--marker);font-weight:800}
+  #toast{
+    position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(16px);
+    background:var(--marker);color:#2a2109;font-weight:800;padding:10px 16px;
+    border-radius:999px;z-index:70;opacity:0;pointer-events:none;transition:.22s ease;
+    white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .you{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .you b{flex:1;min-width:0}
   .you .btn{flex:0 0 auto;min-width:0;min-height:40px;padding:0 12px}
-  .you .btn.go{min-width:72px}
-  #play-menu{
-    position:fixed;z-index:50;display:flex;flex-direction:column;
-    width:240px;max-height:52vh;min-height:160px;
-    background:var(--ink);border:1px solid var(--line);border-radius:12px;
-    box-shadow:0 10px 32px rgba(0,0,0,.5);overflow:hidden;
+  .you .btn.change-play{
+    max-width:min(58vw, 240px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
-  #play-menu .nav{
-    flex:none;height:36px;border:0;background:var(--ink-3);color:var(--chalk);
-    font-size:18px;line-height:36px;cursor:pointer;padding:0;
+  #play-menu, #board-menu{
+    position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;justify-content:flex-end;
+    background:rgba(8,14,18,.55);padding:0;
   }
-  #play-menu .nav:active{color:var(--marker)}
+  #board-menu{z-index:55}
+  #play-menu .sheet, #board-menu .sheet{
+    display:flex;flex-direction:column;min-height:42vh;max-height:min(80vh, 720px);
+    max-height:min(80dvh, 720px);width:100%;
+    background:var(--ink);border:1px solid var(--line);border-bottom:0;
+    border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.45);
+    overflow:hidden;padding-bottom:env(safe-area-inset-bottom);
+  }
+  #play-menu .sheet-head, #board-menu .sheet-head{
+    flex:none;display:flex;align-items:center;gap:10px;padding:12px 12px 8px;
+    border-bottom:1px solid var(--line);
+  }
+  #play-menu .sheet-head b, #board-menu .sheet-head b{flex:1;font-size:16px}
+  #play-menu .sheet-close, #board-menu .sheet-close{
+    flex:none;border:0;background:var(--ink-3);color:var(--chalk);font:inherit;
+    font-size:14px;font-weight:700;border-radius:9px;padding:8px 12px;min-height:40px;cursor:pointer;
+  }
+  #play-menu .plist, #board-menu .plist{
+    flex:1 1 auto;min-height:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;touch-action:pan-y;padding:4px 0 12px;
+  }
   #play-menu .grp{
-    position:sticky;top:0;z-index:1;padding:8px 12px 4px;
+    position:sticky;top:0;z-index:1;padding:10px 16px 4px;
     font-size:11px;font-weight:800;letter-spacing:.02em;
     color:var(--muted);background:var(--ink);
   }
-  #play-menu .play{
+  #play-menu .play, #board-menu .play{
     display:block;width:100%;border:0;background:transparent;color:var(--chalk);
-    font:inherit;font-size:14px;font-weight:650;text-align:left;padding:10px 12px;
-    cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font:inherit;font-size:16px;font-weight:650;text-align:left;padding:12px 16px;
+    min-height:48px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
-  #play-menu .play[aria-current="true"]{background:var(--marker);color:#2a2109}
+  #play-menu .play[aria-current="true"], #board-menu .play[aria-current="true"]{background:var(--marker);color:#2a2109}
+  #board-menu .play{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  #board-menu .play span{color:var(--muted);font-size:13px;font-weight:700}
   @media (min-width:900px){
     body{flex-direction:row}
     header{position:fixed;top:0;left:0;right:calc(var(--dock-w) + 10px);z-index:8;background:var(--ink)}
+    header .title{max-width:none}
     #fieldwrap{flex:1;padding-top:76px;min-height:0;min-width:0}
+    #viewmode{top:86px}
     #split{
       display:block;width:10px;flex:none;align-self:stretch;cursor:col-resize;
       position:relative;z-index:7;background:var(--ink);touch-action:none;border:0;padding:0;
@@ -260,7 +324,10 @@
       background:var(--marker);
     }
     body.resizing, body.resizing *{cursor:col-resize !important;user-select:none}
-    #dock{width:var(--dock-w);flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px;min-width:0}
+    #dock{width:var(--dock-w);flex:none;max-height:none;overflow-y:auto;border-top:0;border-left:1px solid var(--line);padding-top:14px;min-width:0}
+    #dock.slim{max-height:none;overflow-y:auto;padding-top:14px}
+    #dock .dock-more, #dock.expanded .dock-more{display:block}
+    .dock-handle{display:none}
     body.view-3d header{right:0}
     body.view-3d #fieldwrap{padding-top:72px}
     body.view-3d #hud .call{top:80px}
@@ -269,7 +336,11 @@
     body.view-3d{flex-direction:column}
     body.play-on header{position:fixed;padding:8px 12px}
     body.play-on header .title span{display:block}
-    .dock-handle{display:none}
+    #play-menu, #board-menu{align-items:center;justify-content:center;padding:32px}
+    #play-menu .sheet, #board-menu .sheet{
+      width:min(440px, 100%);min-height:240px;max-height:min(72vh, 640px);
+      border-radius:14px;border:1px solid var(--line);padding-bottom:0;
+    }
   }
 </style>
 </head>
@@ -277,12 +348,16 @@
 <header>
   <button id="back" class="btn ghost" type="button">Back</button>
   <img class="brand-mark" src="brand/logo-horiz-sm.png" alt="Malden Catholic Lancers Football" width="199" height="96" decoding="async">
-  <div class="title"><b id="ttl">Playbook Trainer</b><span id="sub">Load your plays, then run them with a finger.</span></div>
+  <div class="title"><b id="ttl">HardWorkIQ</b><span id="sub">Hard work shows up on the field.</span></div>
   <div class="tabs" role="tablist">
     <button role="tab" data-mode="practice">Practice</button>
     <button role="tab" data-mode="study">Study</button>
     <button role="tab" data-mode="plays">Plays</button>
   </div>
+  <button id="account" class="account" type="button" hidden>
+    <b id="who">—</b>
+    <span id="pts">0 pts</span>
+  </button>
 </header>
 <div id="fieldwrap">
   <svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg>
@@ -293,14 +368,22 @@
     <button id="zoom-in" class="btn" type="button">Zoom in</button>
     <button id="zoom-out" class="btn" type="button">Zoom out</button>
   </div>
+  <div id="viewmode" hidden></div>
 </div>
 <button id="split" type="button" aria-label="Resize the side panel" title="Drag to make the panel wider or narrower"></button>
 <div id="dock"></div>
 <div id="gate" hidden></div>
+<div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/quotes.js"></script>
+<script src="js/profanity.js"></script>
+<script src="js/account.js"></script>
 <script>
 /* =====================================================================
-   PLAYBOOK TRAINER
+   HARDWORKIQ
+
    One file. No server, no network. Everything saves to this browser.
    Field is 900 x 1100 px, 18 px per yard, line of scrimmage at y=880,
    downfield is up.
@@ -379,8 +462,10 @@ function changePlayerBtn() {
   return b;
 }
 function changePlayBtn() {
+  const play = cur();
   const b = el('button', { class: 'btn change-play', type: 'button', 'aria-expanded': String(!!S.playMenu) });
-  b.textContent = 'Change play';
+  b.textContent = play ? play.name : 'Change play';
+  b.title = play ? 'Change play · ' + play.name : 'Change play';
   if (S.playMenu) b.setAttribute('aria-pressed', 'true');
   b.onclick = ev => {
     ev.stopPropagation();
@@ -461,19 +546,30 @@ function pickPlay(p) {
   if (anim) { cancelAnimationFrame(anim); anim = null; }
   save();
   render();
+  if (S.mode === 'study') award('study_view', { playId: p.id, playName: p.name });
 }
 function dropPlayMenu() {
   const m = $('#play-menu');
   if (m) m.remove();
 }
+function closePlayMenu() {
+  S.playMenu = false;
+  dropPlayMenu();
+  const btn = document.querySelector('.change-play');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.removeAttribute('aria-pressed');
+  }
+}
 function playMenuPanel() {
   const panel = el('div', { id: 'play-menu' });
-  const up = el('button', { class: 'nav', type: 'button', 'aria-label': 'Previous play' });
-  up.textContent = '▲';
-  up.onclick = ev => { ev.stopPropagation(); stepRail(-1); };
-  const down = el('button', { class: 'nav', type: 'button', 'aria-label': 'Next play' });
-  down.textContent = '▼';
-  down.onclick = ev => { ev.stopPropagation(); stepRail(1); };
+  const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose a play' });
+  const head = el('div', { class: 'sheet-head' });
+  head.append(el('b', { html: 'Choose a play' }));
+  const close = el('button', { class: 'sheet-close', type: 'button', 'aria-label': 'Close play list' });
+  close.textContent = 'Close';
+  close.onclick = ev => { ev.stopPropagation(); closePlayMenu(); };
+  head.append(close);
   const list = el('div', { class: 'plist' });
   const groups = groupedRailPlays();
   if (!groups.length) {
@@ -492,40 +588,111 @@ function playMenuPanel() {
       });
     });
   }
-  panel.append(up, list, down);
-  panel.addEventListener('pointerdown', e => e.stopPropagation());
+  sheet.append(head, list);
+  panel.append(sheet);
+  panel.addEventListener('pointerdown', e => {
+    if (e.target === panel) closePlayMenu();
+    else e.stopPropagation();
+  });
   return panel;
 }
-function placePlayMenu(panel, btn) {
-  const r = btn.getBoundingClientRect();
-  const gap = 8;
-  const w = 240;
-  const left = Math.max(gap, Math.min(r.right - w, window.innerWidth - w - gap));
-  panel.style.left = left + 'px';
-  panel.style.width = w + 'px';
-  const spaceAbove = r.top - gap * 2;
-  const spaceBelow = window.innerHeight - r.bottom - gap * 2;
-  const popUp = use3d() || spaceAbove > spaceBelow;
-  if (popUp) {
-    const maxH = Math.max(160, spaceAbove);
-    panel.style.maxHeight = Math.min(window.innerHeight * 0.52, maxH) + 'px';
-    panel.style.bottom = (window.innerHeight - r.top + gap) + 'px';
-    panel.style.top = 'auto';
-  } else {
-    const maxH = Math.max(160, spaceBelow);
-    panel.style.maxHeight = Math.min(window.innerHeight * 0.52, maxH) + 'px';
-    panel.style.top = (r.bottom + gap) + 'px';
-    panel.style.bottom = 'auto';
-  }
-}
-function mountPlayMenu(btn) {
+function mountPlayMenu() {
   dropPlayMenu();
-  if (!btn) return;
   const panel = playMenuPanel();
   document.body.append(panel);
-  placePlayMenu(panel, btn);
   const curBtn = panel.querySelector('[aria-current="true"]');
-  if (curBtn) curBtn.scrollIntoView({ block: 'nearest' });
+  if (curBtn) curBtn.scrollIntoView({ block: 'center' });
+}
+function dockHandle(d) {
+  const slim = !S.dockOpen;
+  const handle = el('button', {
+    class: 'dock-handle', type: 'button',
+    'aria-expanded': String(!slim),
+    'aria-label': slim ? 'Show more controls' : 'Hide extra controls'
+  });
+  handle.append(document.createTextNode(slim ? 'More' : 'Less'));
+  handle.onclick = () => { S.dockOpen = slim; render(); };
+  d.append(handle);
+  d.classList.toggle('slim', slim);
+  d.classList.toggle('expanded', !slim);
+}
+function moreBox() { return el('div', { class: 'dock-more' }); }
+function toast(data) {
+  const n = $('#toast');
+  if (!n || !data) return;
+  const bits = [];
+  if (data.points) bits.push('+' + data.points);
+  if (data.reason) bits.push(data.reason);
+  n.textContent = bits.join(' · ') || 'HardWorkIQ';
+  n.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => n.classList.remove('show'), 2600);
+}
+function updateAccountChip() {
+  const b = $('#account');
+  if (!b || !Account.me.user) return;
+  b.hidden = false;
+  $('#who').textContent = Account.me.user.username;
+  $('#pts').textContent = (Account.me.user.points || 0).toLocaleString() + ' pts';
+}
+async function award(type, payload) {
+  try {
+    const r = await Account.event(type, payload);
+    if (r) toast(r);
+    updateAccountChip();
+    return r;
+  } catch (e) { console.warn(e); return null; }
+}
+function dropBoard() {
+  const m = $('#board-menu');
+  if (m) m.remove();
+  S.boardOpen = false;
+}
+async function mountBoard() {
+  dropBoard();
+  dropPlayMenu();
+  S.boardOpen = true;
+  const wrap = el('div', { id: 'board-menu' });
+  const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Leaderboard' });
+  const head = el('div', { class: 'sheet-head' });
+  head.append(el('b', { html: 'Leaderboard' }));
+  const close = el('button', { class: 'sheet-close', type: 'button' });
+  close.textContent = 'Close';
+  close.onclick = () => { dropBoard(); };
+  head.append(close);
+  const list = el('div', { class: 'plist' });
+  list.append(el('p', { class: 'hint', html: 'Loading…' }));
+  sheet.append(head, list);
+  wrap.append(sheet);
+  wrap.addEventListener('pointerdown', e => { if (e.target === wrap) dropBoard(); else e.stopPropagation(); });
+  document.body.append(wrap);
+  try {
+    const data = await Account.board();
+    clr(list);
+    (data.rows || []).forEach(r => {
+      const row = el('div', { class: 'play' });
+      if (Account.me.user && r.user_id === Account.me.user.id) row.setAttribute('aria-current', 'true');
+      row.append(document.createTextNode(r.rank + '. ' + r.username));
+      const meta = el('span');
+      meta.textContent = (r.points || 0) + ' pts · best streak ' + (r.best_streak || 0);
+      row.append(meta);
+      list.append(row);
+    });
+    if (!(data.rows || []).length) list.append(el('p', { class: 'hint', html: 'Be the first on the board. Run a play.' }));
+    if (Account.me.user && Account.me.user.role === 'super') {
+      const admin = el('button', { class: 'play', type: 'button' });
+      admin.textContent = 'White-label admin';
+      admin.onclick = () => { location.href = 'admin.html'; };
+      list.append(admin);
+    }
+    const out = el('button', { class: 'play', type: 'button' });
+    out.textContent = 'Sign out';
+    out.onclick = () => Account.logout();
+    list.append(out);
+  } catch (e) {
+    clr(list);
+    list.append(el('p', { class: 'hint', html: (e.message || 'Could not load the board') + ' Run supabase/schema.sql in the Supabase SQL editor if tables are missing.' }));
+  }
 }
 function youBar(d) {
   const p = currentPos();
@@ -534,7 +701,6 @@ function youBar(d) {
   if (use3d()) row.push(snapBtn());
   row.push(changePlayBtn(), changePlayerBtn());
   d.append(el('div', { class: 'you' }, row));
-  if (S.mode !== 'plays') viewChips(d);
 }
 function viewFlipped() {
   if (S.mode === 'plays') return false;
@@ -553,6 +719,7 @@ function resetEye() {
   eye.ty = 0;
 }
 function goBack() {
+  if (S.boardOpen) { dropBoard(); return; }
   if (S.loadingPlays) { S.loadingPlays = false; render(); return; }
   if (S.playMenu) { S.playMenu = false; render(); return; }
   if (S.pickingPos && S.pos) { S.pickingPos = false; render(); return; }
@@ -600,6 +767,22 @@ function updateHud() {
   });
   hud.append(speed);
 }
+function viewHint() {
+  if (S.view3d && !use3d())
+    return el('p', { class: 'hint', html: '3D is the view from your spot. Tracing a route stays on the 2D field.' });
+  if (!S.view3d && viewFlipped())
+    return el('p', { class: 'hint', html: 'Defense view: you are at the bottom of the field, looking at the offense.' });
+  return null;
+}
+function paintViewMode() {
+  const box = $('#viewmode');
+  if (!box) return;
+  clr(box);
+  const show = !!S.pos && !S.pickingPos && !S.loadingPlays && S.mode !== 'plays' && !S.sess;
+  box.hidden = !show;
+  if (!show) return;
+  viewChips(box);
+}
 function viewChips(d) {
   const cs = el('div', { class: 'chips' });
   [['2d', '2D field'], ['3d', '3D snap']].forEach(o => {
@@ -618,8 +801,6 @@ function viewChips(d) {
     cs.append(c);
   });
   d.append(cs);
-  if (S.view3d && !use3d()) d.append(el('p', { class: 'hint', html: '3D is the view from your spot. Tracing a route stays on the 2D field.' }));
-  else if (!S.view3d && viewFlipped()) d.append(el('p', { class: 'hint', html: 'Defense view: you are at the bottom of the field, looking at the offense.' }));
 }
 
 /* ---------------- helpers ---------------- */
@@ -1033,7 +1214,7 @@ function boot() {
     dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all',
     view3d: !!(saved && saved.view3d), snapT: 0, snapping: false,
     playSpeed: clampSpeed(saved && saved.playSpeed),
-    dockW: saved && saved.dockW, playMenu: false }, base);
+    dockW: saved && saved.dockW, playMenu: false, boardOpen: false }, base);
 }
 function folderOf(p) { return (p && p.folder) || 'My plays'; }
 function playFolders() {
@@ -1555,7 +1736,7 @@ function render() {
   if (!S.pos || S.pickingPos) {
     showGate();
     if (!S.pos) {
-      head('Playbook Trainer', 'What position do you play?');
+      head('HardWorkIQ', 'What position do you play?');
       const play = cur();
       if (play) paint(play, false);
       clr($('#dock'));
@@ -1563,6 +1744,7 @@ function render() {
       applyCam();
       paint3d();
       updateHud();
+      paintViewMode();
       return;
     }
   } else if (S.loadingPlays) {
@@ -1575,7 +1757,9 @@ function render() {
   applyCam();
   paint3d();
   updateHud();
-  if (S.playMenu) mountPlayMenu(document.querySelector('.change-play'));
+  paintViewMode();
+        if (S.playMenu) mountPlayMenu();
+  updateAccountChip();
 }
 function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
 function paint(play, showRoutes) {
@@ -1743,7 +1927,7 @@ function loadTeamMC() {
 /* ===================== PRACTICE ===================== */
 function rPractice() {
   const d = $('#dock'); clr(d);
-  d.classList.remove('slim');
+  d.classList.remove('slim', 'expanded');
   if (!S.sess) return practiceSetup(d);
   practiceRun(d);
 }
@@ -1754,7 +1938,7 @@ function practiceSetup(d) {
   if (use3d() && play) {
     head(play.name, (pos ? pos.name + ' · ' : '') + (play.notes || play.type || ''));
   } else {
-    head('Practice', pos
+    head(play ? play.name : 'Practice', pos
       ? pos.name + ' — pick plays, then run your assignment.'
       : 'Pick the plays, then run each route with a finger.');
   }
@@ -1766,16 +1950,20 @@ function practiceSetup(d) {
     return;
   }
 
+  if (!use3d()) dockHandle(d);
   youBar(d);
   const shown = visiblePlays();
   if (!S.pick) S.pick = shown.filter(p => myJobs(p).length).map(p => p.id);
   if (use3d()) return;
   d.append(el('div', { class: 'bar' }, [startPracticeBtn()]));
-  folderChips(d);
-  if (S.loadMsg) d.append(el('p', { class: 'hint', html: S.loadMsg }));
+  const more = moreBox();
+  const hint = viewHint();
+  if (hint) more.append(hint);
+  folderChips(more);
+  if (S.loadMsg) more.append(el('p', { class: 'hint', html: S.loadMsg }));
 
   if (!pos) {
-    d.append(el('h3', { class: 'sec', html: 'Which side of the ball?' }));
+    more.append(el('h3', { class: 'sec', html: 'Which side of the ball?' }));
     const cs = el('div', { class: 'chips' });
     [['both', 'Both'], ['off', 'Offense'], ['def', 'Defense']].forEach(o => {
       const c = el('button', { class: 'chip', 'aria-pressed': String(S.sideFilter === o[0]) });
@@ -1783,19 +1971,20 @@ function practiceSetup(d) {
       c.onclick = () => { S.sideFilter = o[0]; render(); };
       cs.append(c);
     });
-    d.append(cs);
+    more.append(cs);
   }
 
   if (!shown.length) {
-    d.append(el('p', { class: 'hint', html: pos
+    more.append(el('p', { class: 'hint', html: pos
       ? (pos.side === 'off' && S.plays.some(p => p.folder === FOLDER_MC)
         ? 'Malden Catholic Defense is a defensive playbook. Change player to a defensive position to practice those calls, or add an offense play in the Plays tab.'
         : 'No plays with a ' + pos.name.toLowerCase() + ' assignment yet. Use Load Plays, or add one in the Plays tab.')
       : 'No ' + (S.sideFilter === 'def' ? 'defensive' : 'offensive') + ' plays yet. Use Load Plays to add some.' }));
-    d.append(el('div', { class: 'bar' }, [loadPlaysBtn('btn')]));
+    more.append(el('div', { class: 'bar' }, [loadPlaysBtn('btn')]));
+    d.append(more);
     return;
   }
-  d.append(el('h3', { class: 'sec', html: pos ? 'Plays with your assignment' : 'Plays in this session' }));
+  more.append(el('h3', { class: 'sec', html: pos ? 'Plays with your assignment' : 'Plays in this session' }));
   const ul = el('ul', { class: 'list' });
   shown.forEach(p => {
     const on = S.pick.indexOf(p.id) >= 0;
@@ -1814,9 +2003,9 @@ function practiceSetup(d) {
     };
     ul.append(li);
   });
-  d.append(ul);
+  more.append(ul);
 
-  d.append(el('h3', { class: 'sec', html: 'How close does he have to be?' }));
+  more.append(el('h3', { class: 'sec', html: 'How close does he have to be?' }));
   const c1 = el('div', { class: 'chips' });
   [[4, 'Learning'], [3, 'Normal'], [2, 'Game speed']].forEach(o => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(S.tol === o[0]) });
@@ -1824,12 +2013,12 @@ function practiceSetup(d) {
     c.onclick = () => { S.tol = o[0]; save(); render(); };
     c1.append(c);
   });
-  d.append(c1);
+  more.append(c1);
 
   if (pos) {
-    d.append(el('p', { class: 'hint', html: 'You will only run the ' + pos.name.toLowerCase() + ' on each play.' }));
+    more.append(el('p', { class: 'hint', html: 'You will only run the ' + pos.name.toLowerCase() + ' on each play.' }));
   } else {
-    d.append(el('h3', { class: 'sec', html: 'Who gets asked' }));
+    more.append(el('h3', { class: 'sec', html: 'Who gets asked' }));
     const c2 = el('div', { class: 'chips' });
     [['guided', 'One player at a time'], ['free', 'He picks the player']].forEach(o => {
       const c = el('button', { class: 'chip', 'aria-pressed': String(S.style === o[0]) });
@@ -1837,8 +2026,9 @@ function practiceSetup(d) {
       c.onclick = () => { S.style = o[0]; render(); };
       c2.append(c);
     });
-    d.append(c2);
+    more.append(c2);
   }
+  d.append(more);
 }
 
 function startPracticeBtn() {
@@ -1943,10 +2133,7 @@ function practiceRun(d) {
   paintCall(play.name);
 
   const slim = !S.dockOpen;
-  const handle = el('button', { class: 'dock-handle', 'aria-label': slim ? 'Show menu' : 'Hide menu' });
-  handle.onclick = () => { S.dockOpen = slim; render(); };
-  d.append(handle);
-  if (slim) d.classList.add('slim'); else d.classList.remove('slim');
+  dockHandle(d);
 
   // --- dock ---
   if (s.result) {
@@ -1980,6 +2167,8 @@ function practiceRun(d) {
     sk.onclick = () => {
       s.usedHint = true; s.showAnswer = true;
       s.result = { pass: false, why: 'Skipped this one', coverage: 0, worst: 0 };
+      const play = sessPlay();
+      award('practice_rep', { playId: play && play.id, playName: play && play.name, pass: false, hint: true, skipped: true });
       render();
     };
     bar.append(h, sk);
@@ -1996,14 +2185,14 @@ function practiceRun(d) {
   bar.append(quit);
   d.append(bar);
 
-  if (!slim) {
-    youBar(d);
-    if (s.log.length) {
-      const passed = s.log.filter(x => x.pass && !x.hint).length;
-      d.append(el('p', { class: 'hint',
-        html: passed + ' clean out of ' + s.log.length + ' so far.' }));
-    }
+  const more = moreBox();
+  youBar(more);
+  if (s.log.length) {
+    const passed = s.log.filter(x => x.pass && !x.hint).length;
+    more.append(el('p', { class: 'hint',
+      html: passed + ' clean out of ' + s.log.length + ' so far.' }));
   }
+  d.append(more);
 }
 
 // draws the finger trail green where it is on the route, red where it is not
@@ -2063,6 +2252,7 @@ function finish() {
   const log = S.sess.log.slice();
   S.sess = null;
   render();
+  award('session_done', { clean: log.filter(x => x.pass && !x.hint).length, total: log.length });
   const d = $('#dock'); clr(d);
   const clean = log.filter(x => x.pass && !x.hint).length;
   const pct = Math.round(clean / (log.length || 1) * 100);
@@ -2098,6 +2288,7 @@ function finish() {
 /* ===================== STUDY ===================== */
 function rStudy() {
   const d = $('#dock'); clr(d);
+  d.classList.remove('slim', 'expanded');
   const pos = currentPos();
   const play = cur();
   head(play ? play.name : 'Study', play
@@ -2105,52 +2296,63 @@ function rStudy() {
     : 'Nothing loaded');
   if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
 
+  if (!use3d()) dockHandle(d);
   youBar(d);
   if (use3d()) return;
-  folderChips(d);
+  if (play.img && S.peek) drawPhoto(play);
+  paint(play, true);
+
+  const bar = el('div', { class: 'bar' });
+  const run = el('button', { class: 'btn go' });
+  run.textContent = S.view3d ? 'Snap the ball' : 'Run the play';
+  run.onclick = () => {
+    S.fieldMax = true; S.dockOpen = false; S.snapT = 0; render(); animate(play);
+    award('study_run', { playId: play.id, playName: play.name });
+  };
+  const flip = el('button', { class: 'btn' }); flip.textContent = 'Flip sides';
+  flip.onclick = () => { flipPlay(play); save(); render(); };
+  bar.append(run, flip);
+  d.append(bar);
+
+  const more = moreBox();
+  const hint = viewHint();
+  if (hint) more.append(hint);
+  folderChips(more);
   const studyPlays = (pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays)
     .filter(p => !S.bookFilter || S.bookFilter === 'all' || folderOf(p) === S.bookFilter);
   const chips = el('div', { class: 'chips' });
   studyPlays.forEach(p => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
     c.textContent = p.name;
-    c.onclick = () => { S.currentId = p.id; S.snapT = 0; save(); render(); };
+    c.onclick = () => {
+      S.currentId = p.id; S.snapT = 0; save(); render();
+      award('study_view', { playId: p.id, playName: p.name });
+    };
     chips.append(c);
   });
-  d.append(chips);
-  if (play.img && S.peek) drawPhoto(play);
-  paint(play, true);
+  more.append(chips);
 
   const jobs = myJobs(play);
   if (pos) {
-    d.append(el('p', { class: 'hint', html: jobs.length
+    more.append(el('p', { class: 'hint', html: jobs.length
       ? 'Your assignment' + (jobs.length === 1 ? '' : 's') + ': <b>' + jobs.map(p => p.label).join(', ') + '</b>.'
       : 'You do not have an assignment on this play. Pick another, or change player.' }));
   }
 
-  if (use3d()) return;
-
-  const bar = el('div', { class: 'bar' });
   if (play.img) {
     const pk = el('button', { class: 'btn', 'aria-pressed': String(!!S.peek) });
     pk.textContent = S.peek ? 'Hide the card' : 'Show the card';
     pk.onclick = () => { S.peek = !S.peek; render(); };
-    bar.append(pk);
+    more.append(el('div', { class: 'bar' }, [pk]));
   }
-  const run = el('button', { class: 'btn go' });
-  run.textContent = S.view3d ? 'Snap the ball' : 'Run the play';
-  run.onclick = () => { S.fieldMax = true; S.dockOpen = false; S.snapT = 0; render(); animate(play); };
-  const flip = el('button', { class: 'btn' }); flip.textContent = 'Flip sides';
-  flip.onclick = () => { flipPlay(play); save(); render(); };
-  bar.append(run, flip);
-  d.append(bar);
 
   const st = S.stats[play.id];
-  d.append(el('p', { class: 'hint', html: st
+  more.append(el('p', { class: 'hint', html: st
     ? 'Practised ' + st.reps + ' time' + (st.reps === 1 ? '' : 's') + '. ' +
       (st.learned ? 'Marked learned.' : 'Clean streak ' + (st.streak || 0) + ' of 3.')
     : 'Not practised yet.' }));
-  if (play.notes) d.append(el('p', { class: 'hint', html: play.notes }));
+  if (play.notes) more.append(el('p', { class: 'hint', html: play.notes }));
+  d.append(more);
 }
 
 function animate(play) {
@@ -2276,6 +2478,7 @@ const DEF = ['LE', 'DT', 'NT', 'RE', 'W', 'M', 'S', 'LC', 'RC', 'FS', 'SS', 'NB'
 
 function rPlays() {
   const d = $('#dock'); clr(d);
+  d.classList.remove('slim', 'expanded');
   const play = cur();
   head('Plays', ({ list: 'Draw and edit plays', upload: 'Upload pictures of your plays',
     type: 'Type routes in shorthand', load: 'Backup and transfer' })[S.pane]);
@@ -2812,6 +3015,11 @@ field.addEventListener('pointerup', e => {
         s.trail = a.pts;
         s.result = judge(a.pts, a.path || a.p.route, tolPx());
         if (!s.result.pass) s.showAnswer = true;
+        const play = sessPlay();
+        award('practice_rep', {
+          playId: play && play.id, playName: play && play.name,
+          pass: s.result.pass, hint: s.usedHint, skipped: false
+        });
       }
     } else if (a.mode === 'run') {
       S.sess.trail = null; S.sess.active = null;
@@ -2892,12 +3100,16 @@ function bump(msg) {
 /* ===================== boot ===================== */
 document.querySelectorAll('.tabs button').forEach(b => {
   b.onclick = () => {
-    S.mode = b.getAttribute('data-mode');
+    const next = b.getAttribute('data-mode');
+    S.mode = next;
     S.sel = null; S.armed = null; S.loadMsg = '';
     render();
+    const play = cur();
+    if (next === 'study' && play) award('study_view', { playId: play.id, playName: play.name });
   };
 });
 $('#back').onclick = goBack;
+$('#account').onclick = () => { mountBoard(); };
 $('#recenter').onclick = () => {
   resetEye();
   if (!anim) S.snapT = 0;
@@ -2906,18 +3118,14 @@ $('#recenter').onclick = () => {
 $('#zoom-in').onclick = () => bumpZoom(1);
 $('#zoom-out').onclick = () => bumpZoom(-1);
 $('#zoom').addEventListener('pointerdown', e => e.stopPropagation());
+$('#viewmode').addEventListener('pointerdown', e => e.stopPropagation());
 document.addEventListener('pointerdown', e => {
   if (!S.playMenu) return;
   const menu = $('#play-menu');
   const btn = document.querySelector('.change-play');
   if (menu && menu.contains(e.target)) return;
   if (btn && btn.contains(e.target)) return;
-  S.playMenu = false;
-  dropPlayMenu();
-  if (btn) {
-    btn.setAttribute('aria-expanded', 'false');
-    btn.removeAttribute('aria-pressed');
-  }
+  closePlayMenu();
 }, true);
 $('#hud').addEventListener('wheel', e => e.stopPropagation(), { passive: false });
 $('#hud').addEventListener('pointerdown', e => e.stopPropagation());
@@ -3044,7 +3252,13 @@ if ('serviceWorker' in navigator) {
 
 initField();
 applyDockWidth();
-render();
+Account.boot('app').then(ok => {
+  if (!ok) return;
+  if (Account.me.branding && Account.me.branding.appName)
+    $('#ttl').textContent = Account.me.branding.appName;
+  render();
+  updateAccountChip();
+});
 </script>
 </body>
 </html>

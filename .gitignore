@@ -4,3 +4,8 @@ Thumbs.db
 .idea/
 .vscode/
 pdf-pages/
+node_modules/
+data/
+.env
+.env.local
+

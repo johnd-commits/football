@@ -1,0 +1,5 @@
+{
+  "name": "hardworkiq",
+  "private": true,
+  "description": "HardWorkIQ play trainer. Static frontend on Vercel, data on Supabase."
+}

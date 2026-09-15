@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101b23">
+<title>HardWorkIQ</title>
+<link rel="icon" type="image/png" href="icons/hardworkiq.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root{
+    --turf:#2f6b46; --ink:#101b23; --ink-2:#182935; --ink-3:#25404f;
+    --chalk:#f1f4ee; --marker:#f2c230; --line:#365467; --muted:#93a9b7;
+    --fail:#f2705e; --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--ink);color:var(--chalk);font-family:var(--font)}
+  body{
+    display:flex;flex-direction:column;align-items:center;
+    padding:max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  .brand{display:flex;align-items:center;gap:12px;margin:8px 0 18px;width:100%;max-width:440px}
+  .brand img{width:56px;height:56px;border-radius:14px;background:var(--ink-2)}
+  .brand b{display:block;font-size:22px;letter-spacing:-.03em}
+  .brand span{display:block;color:var(--muted);font-size:13px}
+  .quote{
+    width:100%;max-width:440px;background:var(--ink-2);border:1px solid var(--line);
+    border-radius:16px;padding:22px 20px;margin:0 0 22px;
+  }
+  .quote p{margin:0 0 12px;font-size:20px;font-weight:650;line-height:1.35;letter-spacing:-.02em}
+  .quote cite{display:block;color:var(--marker);font-style:normal;font-weight:800;font-size:13px}
+  .quote small{display:block;color:var(--muted);margin-top:4px}
+  form{
+    width:100%;max-width:440px;background:var(--ink-2);border:1px solid var(--line);
+    border-radius:16px;padding:18px;
+  }
+  h2{margin:0 0 6px;font-size:18px}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+  label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 5px}
+  input{
+    width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);
+    background:var(--ink);color:var(--chalk);font:inherit;font-size:16px;
+  }
+  .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  button{
+    flex:1;min-height:46px;border:0;border-radius:10px;font:inherit;font-weight:750;cursor:pointer;
+  }
+  .go{background:var(--marker);color:#2a2109}
+  .ghost{background:var(--ink-3);color:var(--chalk)}
+  .err{color:var(--fail);font-size:13.5px;min-height:18px;margin:8px 0 0}
+  .count{float:right;font-weight:600}
+</style>
+</head>
+<body>
+  <div class="brand">
+    <img data-brand-logo src="icons/hardworkiq.png" alt="HardWorkIQ">
+    <div>
+      <b data-brand-name>HardWorkIQ</b>
+      <span data-brand-tag>Hard work shows up on the field.</span>
+    </div>
+  </div>
+  <figure class="quote" id="quote"></figure>
+  <form id="form">
+    <h2 id="form-title">Sign in</h2>
+    <p class="hint" id="form-hint">School email only.</p>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <div id="reg-only" hidden>
+      <label>Jersey name <span class="count" id="ulen">0/10</span></label>
+      <input id="username" maxlength="10" autocomplete="nickname" placeholder="BadDbackB">
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="new-password" minlength="8">
+    </div>
+    <div id="login-only">
+      <label>Password</label>
+      <input id="password2" type="password" autocomplete="current-password">
+    </div>
+    <p class="err" id="err"></p>
+    <div class="row">
+      <button class="go" id="submit" type="submit">Sign in</button>
+      <button class="ghost" id="toggle" type="button">Create account</button>
+    </div>
+  </form>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/quotes.js"></script>
+<script src="js/profanity.js"></script>
+<script src="js/account.js"></script>
+<script>
+const form = document.getElementById('form');
+const err = document.getElementById('err');
+const toggle = document.getElementById('toggle');
+const submit = document.getElementById('submit');
+const u = document.getElementById('username');
+let mode = 'login';
+u.addEventListener('input', () => { document.getElementById('ulen').textContent = u.value.length + '/10'; });
+function setMode(next) {
+  mode = next;
+  const rec = next === 'register';
+  document.getElementById('reg-only').hidden = !rec;
+  document.getElementById('login-only').hidden = rec;
+  document.getElementById('form-title').textContent = rec ? 'Create your jersey' : 'Sign in';
+  submit.textContent = rec ? 'Join HardWorkIQ' : 'Sign in';
+  toggle.textContent = rec ? 'I already have an account' : 'Create account';
+  const domain = (Account.me.branding && Account.me.branding.emailDomain) || HWIQ_CONFIG.defaultDomain;
+  document.getElementById('form-hint').textContent = rec
+    ? 'Use your @' + domain + ' email. Pick a 3–10 character name (letters and numbers).'
+    : 'School email ending in @' + domain + '. Owner: ' + HWIQ_CONFIG.superEmail + '.';
+}
+toggle.onclick = () => setMode(mode === 'login' ? 'register' : 'login');
+form.onsubmit = async ev => {
+  ev.preventDefault();
+  err.textContent = '';
+  submit.disabled = true;
+  try {
+    const email = document.getElementById('email').value;
+    const password = mode === 'register' ? document.getElementById('password').value : document.getElementById('password2').value;
+    if (mode === 'register') await Account.register(email, password, u.value);
+    else await Account.login(email, password);
+    location.href = 'index.html';
+  } catch (e) {
+    err.textContent = e.message || 'Could not sign in.';
+  }
+  submit.disabled = false;
+};
+Account.boot('login').then(ok => {
+  if (!ok) return;
+  const q = Account.me.quote || pickQuote('football');
+  document.getElementById('quote').innerHTML = '<p>“' + q.text + '”</p><cite>' + q.author + '</cite>' + (q.note ? '<small>' + q.note + '</small>' : '');
+  setMode('login');
+});
+</script>
+</body>
+</html>

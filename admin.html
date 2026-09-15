@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101b23">
+<title>HardWorkIQ Admin</title>
+<link rel="icon" type="image/png" href="icons/hardworkiq.png">
+<style>
+  :root{
+    --turf:#2f6b46; --ink:#101b23; --ink-2:#182935; --ink-3:#25404f;
+    --chalk:#f1f4ee; --marker:#f2c230; --line:#365467; --muted:#93a9b7;
+    --fail:#f2705e; --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--chalk);font-family:var(--font);padding:20px 16px 40px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+  header img{width:44px;height:44px;border-radius:10px}
+  h1{margin:0;font-size:22px}
+  a{color:var(--marker)}
+  .grid{display:grid;gap:16px;max-width:920px}
+  @media (min-width:800px){.grid{grid-template-columns:1fr 1fr}}
+  section{background:var(--ink-2);border:1px solid var(--line);border-radius:14px;padding:16px}
+  h2{margin:0 0 12px;font-size:16px}
+  label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 5px}
+  input,select,textarea{
+    width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);
+    background:var(--ink);color:var(--chalk);font:inherit;
+  }
+  .swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .swatches label{margin:0}
+  .swatches input[type=color]{height:40px;padding:2px;cursor:pointer}
+  button{
+    margin-top:14px;min-height:44px;padding:0 16px;border:0;border-radius:10px;
+    background:var(--marker);color:#2a2109;font:inherit;font-weight:750;cursor:pointer;
+  }
+  button.warn{background:transparent;color:var(--fail);border:1px solid var(--fail);margin:0}
+  .msg{min-height:18px;font-size:13px;color:var(--muted);margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+  .locked{color:var(--marker);font-weight:800}
+</style>
+</head>
+<body>
+<header>
+  <img data-brand-logo src="icons/hardworkiq.png" alt="">
+  <div>
+    <h1>White label</h1>
+    <div style="color:var(--muted);font-size:13px">Owner only · <a href="index.html">Back to app</a></div>
+  </div>
+</header>
+<div class="grid">
+  <section>
+    <h2>Product</h2>
+    <label>App name</label><input id="appName">
+    <label>Short name</label><input id="shortName">
+    <label>Tagline</label><input id="tagline">
+    <label>Sport</label><select id="sport"></select>
+    <label>Allowed email domain</label><input id="emailDomain">
+    <label>Logo URL</label><input id="logoUrl">
+    <button id="save" type="button">Save branding</button>
+    <p class="msg" id="msg"></p>
+    <p class="msg">Owner <b>jdonovan151@gmail.com</b> can never be removed.</p>
+  </section>
+  <section>
+    <h2>Colors</h2>
+    <div class="swatches" id="colors"></div>
+  </section>
+</div>
+<section style="max-width:920px;margin-top:16px">
+  <h2>Players</h2>
+  <div id="users"></div>
+</section>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/quotes.js"></script>
+<script src="js/profanity.js"></script>
+<script src="js/account.js"></script>
+<script>
+const COLOR_KEYS = ['ink','ink2','ink3','chalk','marker','turf','turfDark','line','muted'];
+function fill() {
+  const b = Account.me.branding;
+  document.getElementById('appName').value = b.appName;
+  document.getElementById('shortName').value = b.shortName;
+  document.getElementById('tagline').value = b.tagline;
+  document.getElementById('emailDomain').value = b.emailDomain;
+  document.getElementById('logoUrl').value = b.logoUrl;
+  const sel = document.getElementById('sport');
+  sel.innerHTML = HWIQ_CONFIG.sports.map(s => '<option value="'+s.id+'"'+(s.id===b.sport?' selected':'')+'>'+s.name+'</option>').join('');
+  document.getElementById('colors').innerHTML = COLOR_KEYS.map(k =>
+    '<label>'+k+'<input type="color" data-k="'+k+'" value="'+(b.colors[k]||'#101b23')+'"></label>'
+  ).join('');
+}
+async function loadUsers() {
+  const box = document.getElementById('users');
+  try {
+    const rows = await Account.listUsers();
+    box.innerHTML = '<table><tr><th>Name</th><th>Email</th><th>Pts</th><th>Best streak</th><th></th></tr>' +
+      rows.map(u => '<tr><td>'+u.username+(u.locked?' <span class="locked">OWNER</span>':'')+'</td><td>'+u.email+'</td><td>'+u.points+'</td><td>'+u.best_streak+'</td><td>'+(u.locked?'':'<button class="warn" data-id="'+u.id+'">Remove</button>')+'</td></tr>').join('') + '</table>';
+    box.querySelectorAll('button.warn').forEach(b => b.onclick = async () => {
+      if (!confirm('Remove this player?')) return;
+      try { await Account.removeUser(b.getAttribute('data-id')); await loadUsers(); }
+      catch (e) { alert(e.message); }
+    });
+  } catch (e) {
+    box.textContent = e.message;
+  }
+}
+document.getElementById('save').onclick = async () => {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Saving…';
+  const colors = {};
+  document.querySelectorAll('#colors input').forEach(i => { colors[i.getAttribute('data-k')] = i.value; });
+  try {
+    await Account.saveBranding({
+      appName: document.getElementById('appName').value,
+      shortName: document.getElementById('shortName').value,
+      tagline: document.getElementById('tagline').value,
+      sport: document.getElementById('sport').value,
+      emailDomain: document.getElementById('emailDomain').value,
+      logoUrl: document.getElementById('logoUrl').value,
+      colors: colors
+    });
+    msg.textContent = 'Saved. Refresh the app to see it everywhere.';
+  } catch (e) { msg.textContent = e.message; }
+};
+Account.boot('admin').then(ok => { if (!ok) return; fill(); loadUsers(); });
+</script>
+</body>
+</html>

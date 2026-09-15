@@ -1,38 +1,33 @@
-# Playbook Trainer
+# HardWorkIQ
 
-A phone-first football playbook trainer. Load plays, then run each route with a finger. Everything saves in the browser — no account, no server.
+Phone-first play trainer for high school teams. Load the playbook, then run each assignment with a finger. Accounts, points, and the leaderboard live in Supabase.
 
-**Live app:** https://johnd-commits.github.io/football/
+**Live app:** https://football-iota-two.vercel.app/
 
-## Open it on your phone
+## First-time Supabase setup
 
-1. Push this repo (already set as `origin`).
-2. Wait a minute for GitHub Pages to publish.
-3. On your phone, open https://johnd-commits.github.io/football/
-4. Add it to your home screen so it opens like an app:
+1. Open the [SQL Editor](https://supabase.com/dashboard/project/ewdoqyixsioeymfrvfyw/sql) for project `ewdoqyixsioeymfrvfyw`.
+2. Paste and run `supabase/schema.sql`.
+3. Auth → Providers → Email: turn **off** “Confirm email” so kids can sign in immediately with `@maldencatholic.org`.
+4. Register once with **jdonovan151@gmail.com**. That account is the owner and can never be deleted.
+5. Everyone else must use a `@maldencatholic.org` address and a 3–10 character jersey name.
 
-**iPhone (Safari)**
-- Share → **Add to Home Screen**
-- Name it Playbook → Add
+Optional CLI (not required for Vercel):
 
-**Android (Chrome)**
-- Menu → **Add to Home screen** / **Install app**
+```
+npx supabase login
+npx supabase init
+npx supabase link --project-ref ewdoqyixsioeymfrvfyw
+```
 
-After that it launches full-screen, works offline, and keeps your playbook on that phone.
+The database password stays in Supabase. Do not put it in the app.
 
 ## What it does
 
-- **Practice** — pick offense, defense, or both, then drag each player through his assignment. The app grades the path.
-- **Study** — watch the play run, flip sides, peek at an uploaded play card.
-- **Plays** — draw formations, type routes in shorthand (`Z slant`, `LC third`), upload photos of play cards, or backup the whole book as `playbook.json`.
+- **Practice** — trace your assignment. Clean reps (no hints) build a streak and points.
+- **Study** — watch the play, then run it for bonus points.
+- **Plays** — draw formations, type routes, upload cards.
+- **Leaderboard** — tap your name in the header.
+- **Admin** — owner-only white label (name, colors, logo, sport, school email domain).
 
-Sample plays are included so you can try it immediately.
-
-## Host it yourself
-
-This is a static site. Any host that serves files works:
-
-- GitHub Pages (this repo)
-- Netlify, Cloudflare Pages, or a folder on any web server
-
-Just publish the contents of this folder. Do not open `index.html` as a `file://` page if you want install / offline — serve it over https.
+Jersey names are 3–10 characters. Lewd or swear names are blocked.
