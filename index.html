@@ -56,14 +56,41 @@
   body.view-3d #view3d{display:block}
   body.view-3d #fieldwrap{flex:1;min-height:0;padding:0}
   body.view-3d #dock{flex:none;max-height:22vh;padding:8px 10px 10px;overflow-y:auto}
-  body.view-3d.snapping #dock{display:none}
-  body.view-3d.snapping #fieldwrap{flex:1;min-height:0}
   #hud{
-    display:none;position:absolute;left:8px;right:8px;top:8px;z-index:6;gap:8px;
-    pointer-events:none;
+    display:none;position:absolute;inset:0;z-index:6;pointer-events:none;
   }
-  body.view-3d #hud:not([hidden]){display:flex}
-  #hud > *{pointer-events:auto;flex:1;min-height:46px}
+  body.view-3d #hud:not([hidden]){display:block}
+  #hud .speed{
+    position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:4px;pointer-events:auto;
+    color:#f2705e;font-weight:800;font-size:16px;letter-spacing:.04em;
+    text-shadow:0 1px 4px #101b23;white-space:nowrap;
+  }
+  #hud .speed button{
+    background:transparent;border:0;color:inherit;font:inherit;font-weight:800;
+    cursor:pointer;padding:6px 7px;opacity:.45;min-width:28px;
+  }
+  #hud .speed button[aria-pressed="true"]{opacity:1;color:#f2c230}
+  #hud .play-rail{
+    position:absolute;right:10px;top:12px;bottom:72px;width:96px;
+    display:flex;flex-direction:column;pointer-events:auto;
+    background:rgba(16,27,35,.58);border:1px solid var(--line);border-radius:12px;
+    overflow:hidden;
+  }
+  #hud .play-rail .nav{
+    flex:none;height:36px;border:0;background:rgba(16,27,35,.4);color:var(--chalk);
+    font-size:18px;line-height:36px;cursor:pointer;padding:0;
+  }
+  #hud .play-rail .nav:active{color:var(--marker)}
+  #hud .play-rail .plist{
+    flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  #hud .play-rail .play{
+    display:block;width:100%;border:0;background:transparent;color:var(--chalk);
+    font:inherit;font-size:12px;font-weight:650;text-align:left;padding:8px 8px;
+    cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #hud .play-rail .play[aria-current="true"]{background:var(--marker);color:#2a2109}
   #recenter{
     display:none;position:absolute;right:12px;bottom:12px;z-index:6;
     width:52px;height:52px;border-radius:50%;padding:0;min-width:0;min-height:0;
@@ -158,6 +185,7 @@
   .you{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .you b{flex:1;min-width:0}
   .you .btn{flex:0 0 auto;min-width:0;min-height:40px;padding:0 12px}
+  .you .btn.go{min-width:72px}
   @media (min-width:900px){
     body{flex-direction:row}
     header{position:fixed;top:0;left:0;right:calc(var(--dock-w) + 10px);z-index:8;background:var(--ink)}
@@ -177,6 +205,7 @@
     #dock{width:var(--dock-w);flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px;min-width:0}
     body.view-3d header{right:0}
     body.view-3d #fieldwrap{padding-top:56px}
+    body.view-3d #hud .play-rail{top:64px}
     body.view-3d #dock{width:100%;max-height:22vh;border-left:0;border-top:1px solid var(--line)}
     body.view-3d #split{display:none}
     body.view-3d{flex-direction:column}
@@ -291,6 +320,39 @@ function changePlayBtn() {
   b.onclick = openPlayPicker;
   return b;
 }
+function snapBtn() {
+  const b = el('button', { class: 'btn go', type: 'button' });
+  b.textContent = 'Snap';
+  b.onclick = startSnap;
+  return b;
+}
+function clampSpeed(v) {
+  const n = Number(v);
+  return (n === 0.5 || n === 1 || n === 2 || n === 3) ? n : 1;
+}
+function playSpeed() { return clampSpeed(S.playSpeed); }
+function snapDur() {
+  const base = use3d() ? 2800 : 2400;
+  return Math.max(350, Math.round(base / playSpeed()));
+}
+function startSnap() {
+  const play = S.sess ? sessPlay() : cur();
+  if (!play) return;
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
+  S.snapping = true; S.fieldMax = true; S.dockOpen = false; S.snapT = 0;
+  render();
+  animate(play);
+}
+function railPlays() {
+  return S.plays.slice();
+}
+function stepRail(dir) {
+  const plays = railPlays();
+  if (!plays.length) return;
+  let i = plays.findIndex(p => p.id === S.currentId);
+  if (i < 0) i = 0;
+  pickPlay(plays[(i + dir + plays.length) % plays.length]);
+}
 function openPlayPicker() {
   S.pickingPlay = true;
   render();
@@ -307,11 +369,10 @@ function pickPlay(p) {
 function youBar(d) {
   const p = currentPos();
   if (!p) return;
-  d.append(el('div', { class: 'you' }, [
-    el('b', { html: 'You are the ' + p.name.toLowerCase() + '.' }),
-    changePlayBtn(),
-    changePlayerBtn()
-  ]));
+  const row = [el('b', { html: 'You are the ' + p.name.toLowerCase() + '.' })];
+  if (use3d()) row.push(snapBtn());
+  row.push(changePlayBtn(), changePlayerBtn());
+  d.append(el('div', { class: 'you' }, row));
   if (S.mode !== 'plays') viewChips(d);
 }
 function viewFlipped() {
@@ -347,21 +408,45 @@ function updateHud() {
   const hud = $('#hud');
   const rec = $('#recenter');
   const on = use3d();
-  hud.hidden = !on || !!S.snapping;
+  hud.hidden = !on;
   rec.hidden = !on;
   document.body.classList.toggle('snapping', !!(on && S.snapping));
   clr(hud);
-  if (!on || S.snapping) return;
-  const snap = el('button', { class: 'btn go', type: 'button' });
-  snap.textContent = 'Snap the ball';
-  snap.onclick = () => {
-    const play = S.sess ? sessPlay() : cur();
-    if (!play) return;
-    S.snapping = true; S.fieldMax = true; S.dockOpen = false; S.snapT = 0;
-    render();
-    animate(play);
-  };
-  hud.append(snap);
+  if (!on) return;
+
+  const speed = el('div', { class: 'speed' });
+  speed.append(el('span', { html: 'Speed' }));
+  [0.5, 1, 2, 3].forEach(v => {
+    const b = el('button', { type: 'button', 'aria-pressed': String(playSpeed() === v) });
+    b.textContent = v === 0.5 ? '.5' : String(v);
+    b.onclick = () => { S.playSpeed = v; save(); updateHud(); };
+    speed.append(b);
+  });
+  hud.append(speed);
+
+  const plays = railPlays();
+  if (!plays.length) return;
+  const rail = el('div', { class: 'play-rail' });
+  const up = el('button', { class: 'nav', type: 'button', 'aria-label': 'Previous play' });
+  up.textContent = '▲';
+  up.onclick = () => stepRail(-1);
+  const down = el('button', { class: 'nav', type: 'button', 'aria-label': 'Next play' });
+  down.textContent = '▼';
+  down.onclick = () => stepRail(1);
+  const list = el('div', { class: 'plist' });
+  plays.forEach(p => {
+    const attrs = { class: 'play', type: 'button' };
+    if (p.id === S.currentId) attrs['aria-current'] = 'true';
+    const b = el('button', attrs);
+    b.textContent = p.name;
+    b.title = p.name;
+    b.onclick = () => pickPlay(p);
+    list.append(b);
+  });
+  rail.append(up, list, down);
+  hud.append(rail);
+  const curBtn = list.querySelector('[aria-current="true"]');
+  if (curBtn) curBtn.scrollIntoView({ block: 'nearest' });
 }
 function viewChips(d) {
   const cs = el('div', { class: 'chips' });
@@ -381,10 +466,8 @@ function viewChips(d) {
     cs.append(c);
   });
   d.append(cs);
-  if (S.view3d) d.append(el('p', { class: 'hint', html: use3d()
-    ? 'Drag to rotate. Drag up/down to look from above. Pinch to zoom, two fingers to slide.'
-    : '3D is the view from your spot. Tracing a route stays on the 2D field.' }));
-  else if (viewFlipped()) d.append(el('p', { class: 'hint', html: 'Defense view: you are at the bottom of the field, looking at the offense.' }));
+  if (S.view3d && !use3d()) d.append(el('p', { class: 'hint', html: '3D is the view from your spot. Tracing a route stays on the 2D field.' }));
+  else if (!S.view3d && viewFlipped()) d.append(el('p', { class: 'hint', html: 'Defense view: you are at the bottom of the field, looking at the offense.' }));
 }
 
 /* ---------------- helpers ---------------- */
@@ -797,6 +880,7 @@ function boot() {
     sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos,
     dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all',
     view3d: !!(saved && saved.view3d), snapT: 0, snapping: false,
+    playSpeed: clampSpeed(saved && saved.playSpeed),
     dockW: saved && saved.dockW, pickingPlay: false }, base);
 }
 function folderOf(p) { return (p && p.folder) || 'My plays'; }
@@ -811,7 +895,7 @@ function ensureTeamPacks(plays) {
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(
-      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos, view3d: !!S.view3d, dockW: S.dockW }));
+      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos, view3d: !!S.view3d, dockW: S.dockW, playSpeed: playSpeed() }));
     S.saveErr = '';
   } catch (e) {
     S.saveErr = 'This browser is out of room. Remove a play picture or two — once a play is traced the picture is just a reference.';
@@ -1860,7 +1944,8 @@ function rStudy() {
   if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
 
   youBar(d);
-  if (!use3d()) d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+  if (use3d()) return;
+  d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
   folderChips(d);
   const studyPlays = (pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays)
     .filter(p => !S.bookFilter || S.bookFilter === 'all' || folderOf(p) === S.bookFilter);
@@ -1911,7 +1996,7 @@ function animate(play) {
   if (anim) cancelAnimationFrame(anim);
   const movers = play.players.filter(p => jobOf(p)).map(p => ({ p: p, pts: resample(jobOf(p), 70) }));
   const t0 = performance.now();
-  const dur = use3d() ? 2800 : 2400;
+  const dur = snapDur();
   const step = now => {
     const t = clamp((now - t0) / dur, 0, 1);
     S.snapT = t;
@@ -2657,6 +2742,8 @@ $('#recenter').onclick = () => {
   if (!anim) S.snapT = 0;
   paint3d();
 };
+$('#hud').addEventListener('wheel', e => e.stopPropagation(), { passive: false });
+$('#hud').addEventListener('pointerdown', e => e.stopPropagation());
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     goBack();
