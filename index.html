@@ -19,6 +19,7 @@
     --chalk:#f1f4ee; --ink:#101b23; --ink-2:#182935; --ink-3:#25404f;
     --line:#365467; --muted:#93a9b7;
     --marker:#f2c230; --pass:#4fd189; --fail:#f2705e; --answer:#5fb0f0;
+    --dock-w:404px;
     --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
@@ -70,6 +71,7 @@
   }
   body.view-3d #recenter:not([hidden]){display:grid;place-items:center}
 
+  #split{display:none}
   #dock{flex:none;border-top:1px solid var(--line);background:var(--ink-2);padding:10px 12px 14px;max-height:40vh;overflow-y:auto}
   .dock-handle{
     display:block;width:42px;height:5px;margin:0 auto 8px;border:0;padding:10px 0 8px;
@@ -153,16 +155,30 @@
     header .title b{font-size:15px}
     #back{min-width:52px;padding:0 8px}
   }
-  .you{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .you{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .you b{flex:1;min-width:0}
+  .you .btn{flex:0 0 auto;min-width:0;min-height:40px;padding:0 12px}
   @media (min-width:900px){
     body{flex-direction:row}
-    header{position:fixed;top:0;left:0;right:404px;z-index:5;background:var(--ink)}
-    #fieldwrap{flex:1;padding-top:64px;min-height:0}
-    #dock{width:404px;flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px}
+    header{position:fixed;top:0;left:0;right:calc(var(--dock-w) + 10px);z-index:8;background:var(--ink)}
+    #fieldwrap{flex:1;padding-top:64px;min-height:0;min-width:0}
+    #split{
+      display:block;width:10px;flex:none;align-self:stretch;cursor:col-resize;
+      position:relative;z-index:7;background:var(--ink);touch-action:none;border:0;padding:0;
+    }
+    #split::before{
+      content:"";position:absolute;top:50%;left:3px;width:4px;height:56px;margin-top:-28px;
+      border-radius:99px;background:var(--line);
+    }
+    #split:hover::before, #split:focus-visible::before, body.resizing #split::before{
+      background:var(--marker);
+    }
+    body.resizing, body.resizing *{cursor:col-resize !important;user-select:none}
+    #dock{width:var(--dock-w);flex:none;max-height:none;border-top:0;border-left:1px solid var(--line);padding-top:14px;min-width:0}
     body.view-3d header{right:0}
     body.view-3d #fieldwrap{padding-top:56px}
     body.view-3d #dock{width:100%;max-height:22vh;border-left:0;border-top:1px solid var(--line)}
+    body.view-3d #split{display:none}
     body.view-3d{flex-direction:column}
     body.play-on header{position:fixed;padding:8px 12px}
     body.play-on header .title span{display:block}
@@ -186,6 +202,7 @@
   <div id="hud"></div>
   <button id="recenter" class="btn" type="button" hidden>Center</button>
 </div>
+<button id="split" type="button" aria-label="Resize the side panel" title="Drag to make the panel wider or narrower"></button>
 <div id="dock"></div>
 <div id="gate" hidden></div>
 
@@ -263,16 +280,36 @@ function openPosPicker() {
   render();
 }
 function changePlayerBtn() {
-  const b = el('button', { class: 'btn ghost' });
+  const b = el('button', { class: 'btn ghost', type: 'button' });
   b.textContent = 'Change player';
   b.onclick = openPosPicker;
   return b;
+}
+function changePlayBtn() {
+  const b = el('button', { class: 'btn', type: 'button' });
+  b.textContent = 'Change play';
+  b.onclick = openPlayPicker;
+  return b;
+}
+function openPlayPicker() {
+  S.pickingPlay = true;
+  render();
+}
+function pickPlay(p) {
+  S.currentId = p.id;
+  S.pickingPlay = false;
+  S.snapT = 0;
+  S.snapping = false;
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
+  save();
+  render();
 }
 function youBar(d) {
   const p = currentPos();
   if (!p) return;
   d.append(el('div', { class: 'you' }, [
     el('b', { html: 'You are the ' + p.name.toLowerCase() + '.' }),
+    changePlayBtn(),
     changePlayerBtn()
   ]));
   if (S.mode !== 'plays') viewChips(d);
@@ -295,6 +332,7 @@ function resetEye() {
 }
 function goBack() {
   if (S.loadingPlays) { S.loadingPlays = false; render(); return; }
+  if (S.pickingPlay) { S.pickingPlay = false; render(); return; }
   if (S.pickingPos && S.pos) { S.pickingPos = false; render(); return; }
   if (anim) { cancelAnimationFrame(anim); anim = null; }
   if (S.snapping || S.fieldMax) {
@@ -758,7 +796,8 @@ function boot() {
     sess: null, pane: 'list', style: 'guided', pick: null, loadMsg: '',
     sideFilter: pos ? pos.side : 'both', upSide: 'off', saveErr: '', pickingPos: !base.pos,
     dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all',
-    view3d: !!(saved && saved.view3d), snapT: 0, snapping: false }, base);
+    view3d: !!(saved && saved.view3d), snapT: 0, snapping: false,
+    dockW: saved && saved.dockW, pickingPlay: false }, base);
 }
 function folderOf(p) { return (p && p.folder) || 'My plays'; }
 function playFolders() {
@@ -772,12 +811,21 @@ function ensureTeamPacks(plays) {
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(
-      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos, view3d: !!S.view3d }));
+      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos, view3d: !!S.view3d, dockW: S.dockW }));
     S.saveErr = '';
   } catch (e) {
     S.saveErr = 'This browser is out of room. Remove a play picture or two — once a play is traced the picture is just a reference.';
     console.warn(e);
   }
+}
+const DOCK_MIN = 280, DOCK_DEFAULT = 404;
+function clampDock(w) {
+  const max = Math.max(DOCK_MIN, window.innerWidth - 10 - 300);
+  return clamp(Math.round(Number(w) || DOCK_DEFAULT), DOCK_MIN, Math.min(720, max));
+}
+function applyDockWidth() {
+  S.dockW = clampDock(S.dockW);
+  document.documentElement.style.setProperty('--dock-w', S.dockW + 'px');
 }
 const cur = () => S.plays.find(p => p.id === S.currentId) || S.plays[0] || null;
 const tolPx = () => S.tol * YARD;
@@ -1256,6 +1304,8 @@ function render() {
       updateHud();
       return;
     }
+  } else if (S.pickingPlay) {
+    showPlayPicker();
   } else if (S.loadingPlays) {
     showLoad();
   } else {
@@ -1321,6 +1371,58 @@ function hideGate() {
   const g = $('#gate');
   g.hidden = true;
   clr(g);
+}
+function showPlayPicker() {
+  const g = $('#gate');
+  clr(g);
+  g.hidden = false;
+  g.append(overlayBack());
+  g.append(el('h2', { html: 'Change play' }));
+  g.append(el('p', { class: 'lead', html: 'Scroll through every loaded play, then tap one.' }));
+  if (!S.plays.length) {
+    g.append(el('p', { class: 'hint', html: 'No plays loaded yet. Use Load Plays first.' }));
+    g.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+    return;
+  }
+  const search = el('input', { type: 'text', placeholder: 'Search plays' });
+  const box = el('div');
+  const draw = () => {
+    clr(box);
+    const q = (search.value || '').trim().toLowerCase();
+    const groups = [];
+    S.plays.forEach(p => {
+      const hay = (p.name + ' ' + folderOf(p) + ' ' + (p.notes || '') + ' ' + (p.type || '')).toLowerCase();
+      if (q && hay.indexOf(q) < 0) return;
+      const f = folderOf(p);
+      let g2 = groups.find(x => x.f === f);
+      if (!g2) { g2 = { f: f, plays: [] }; groups.push(g2); }
+      g2.plays.push(p);
+    });
+    if (!groups.length) {
+      box.append(el('p', { class: 'hint', html: 'No plays match that search.' }));
+      return;
+    }
+    groups.forEach(gr => {
+      box.append(el('h3', { class: 'sec', html: gr.f + ' · ' + gr.plays.length }));
+      const ul = el('ul', { class: 'list' });
+      gr.plays.forEach(p => {
+        const jobs = myJobs(p);
+        const li = el('li', { 'aria-current': String(p.id === S.currentId) }, [
+          el('span', { class: 'nm', html: p.name }),
+          el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'D' : 'O' }),
+          el('span', { class: 'pill', html: jobs.length ? jobs.map(j => j.label).join(' ') : '—' })
+        ]);
+        li.onclick = () => pickPlay(p);
+        ul.append(li);
+      });
+      box.append(ul);
+    });
+  };
+  search.addEventListener('input', draw);
+  g.append(search);
+  g.append(box);
+  draw();
+  setTimeout(() => search.focus(), 0);
 }
 function loadPlaysBtn(kind) {
   const b = el('button', { class: kind || 'btn go' });
@@ -1418,7 +1520,9 @@ function practiceSetup(d) {
   }
 
   youBar(d);
-  d.append(el('div', { class: 'bar' }, [loadPlaysBtn()]));
+  const shown = visiblePlays();
+  if (!S.pick) S.pick = shown.filter(p => myJobs(p).length).map(p => p.id);
+  d.append(el('div', { class: 'bar' }, [startPracticeBtn(), loadPlaysBtn('btn')]));
   folderChips(d);
   if (S.loadMsg) d.append(el('p', { class: 'hint', html: S.loadMsg }));
 
@@ -1434,8 +1538,6 @@ function practiceSetup(d) {
     d.append(cs);
   }
 
-  const shown = visiblePlays();
-  if (!S.pick) S.pick = shown.filter(p => myJobs(p).length).map(p => p.id);
   if (!shown.length) {
     d.append(el('p', { class: 'hint', html: pos
       ? (pos.side === 'off' && S.plays.some(p => p.folder === FOLDER_MC)
@@ -1490,14 +1592,24 @@ function practiceSetup(d) {
     d.append(c2);
   }
 
-  const go = el('button', { class: 'btn go' });
+  d.append(el('div', { class: 'bar' }, [startPracticeBtn()]));
+}
+
+function startPracticeBtn() {
+  const go = el('button', { class: 'btn go', type: 'button' });
   go.textContent = 'Start practice';
   go.disabled = !sessionPlays().length;
   go.onclick = startSession;
-  d.append(el('div', { class: 'bar' }, [go]));
+  return go;
 }
-
-function shuffle(a) { return a.slice().sort(() => Math.random() - .5); }
+function shuffle(a) {
+  const b = a.slice();
+  for (let i = b.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = b[i]; b[i] = b[j]; b[j] = t;
+  }
+  return b;
+}
 const sideOf = p => p.side === 'def' ? 'def' : 'off';
 function visiblePlays() {
   const pos = currentPos();
@@ -1509,7 +1621,13 @@ function visiblePlays() {
   return list;
 }
 function sessionPlays() {
-  return visiblePlays().filter(p => (S.pick || []).indexOf(p.id) >= 0 && myJobs(p).length);
+  const seen = {};
+  return visiblePlays().filter(p => {
+    if ((S.pick || []).indexOf(p.id) < 0 || !myJobs(p).length) return false;
+    if (seen[p.id]) return false;
+    seen[p.id] = true;
+    return true;
+  });
 }
 
 function startSession() {
@@ -1524,7 +1642,8 @@ function startSession() {
 function sessPlay() { return S.sess.order[S.sess.i]; }
 function loadTasks() {
   const s = S.sess;
-  s.tasks = shuffle(myJobs(sessPlay()).map(p => p.id));
+  const jobs = myJobs(sessPlay()).map(p => p.id);
+  s.tasks = jobs.length ? shuffle(jobs).slice(0, 1) : [];
   s.t = 0; s.done = []; s.hint = 0; s.usedHint = false;
   s.result = null; s.trail = null; s.active = null; s.showAnswer = false;
   const me = sessPlay().players.find(p => p.id === s.tasks[0]) ||
@@ -1667,11 +1786,7 @@ function useHint() {
 }
 
 function lastStep() {
-  const s = S.sess;
-  const moreHere = s.style === 'guided'
-    ? s.t < s.tasks.length - 1
-    : s.done.length < s.tasks.length - 1;
-  return !moreHere && s.i >= s.order.length - 1;
+  return S.sess.i >= S.sess.order.length - 1;
 }
 
 function advance() {
@@ -1682,9 +1797,6 @@ function advance() {
   }
   s.result = null; s.trail = null; s.hint = 0; s.usedHint = false;
   s.showAnswer = false; s.active = null;
-
-  if (s.style === 'guided' && s.t < s.tasks.length - 1) { s.t++; render(); return; }
-  if (s.style === 'free' && s.done.length < s.tasks.length) { render(); return; }
 
   scorePlay(sessPlay().id);
   if (s.i >= s.order.length - 1) return finish();
@@ -1741,11 +1853,7 @@ function finish() {
 function rStudy() {
   const d = $('#dock'); clr(d);
   const pos = currentPos();
-  let play = cur();
-  if (pos && play && sideOf(play) !== pos.side) {
-    play = S.plays.find(p => sideOf(p) === pos.side) || play;
-    if (play) S.currentId = play.id;
-  }
+  const play = cur();
   head(play ? play.name : 'Study', play
     ? ((pos ? pos.name + ' · ' : '') + (play.notes || play.type))
     : 'Nothing loaded');
@@ -1756,10 +1864,6 @@ function rStudy() {
   folderChips(d);
   const studyPlays = (pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays)
     .filter(p => !S.bookFilter || S.bookFilter === 'all' || folderOf(p) === S.bookFilter);
-  if (play && studyPlays.length && studyPlays.indexOf(play) < 0) {
-    play = studyPlays[0];
-    S.currentId = play.id;
-  }
   const chips = el('div', { class: 'chips' });
   studyPlays.forEach(p => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
@@ -2629,13 +2733,53 @@ view3d.addEventListener('pointercancel', e => {
   screens.delete(e.pointerId);
   if (act && (act.type === 'look' || act.type === 'lookz')) act = null;
 });
-window.addEventListener('resize', () => { if (use3d()) paint3d(); });
+let splitDrag = null;
+const split = $('#split');
+split.addEventListener('pointerdown', e => {
+  if (!window.matchMedia('(min-width:900px)').matches || use3d()) return;
+  e.preventDefault();
+  try { split.setPointerCapture(e.pointerId); } catch (err) {}
+  document.body.classList.add('resizing');
+  splitDrag = { x: e.clientX, w: S.dockW || DOCK_DEFAULT };
+});
+split.addEventListener('pointermove', e => {
+  if (!splitDrag) return;
+  S.dockW = clampDock(splitDrag.w - (e.clientX - splitDrag.x));
+  applyDockWidth();
+  applyCam();
+  if (use3d()) paint3d();
+});
+split.addEventListener('pointerup', e => {
+  if (!splitDrag) return;
+  splitDrag = null;
+  document.body.classList.remove('resizing');
+  try { split.releasePointerCapture(e.pointerId); } catch (err) {}
+  save();
+  applyCam();
+  if (use3d()) paint3d();
+});
+split.addEventListener('pointercancel', () => {
+  splitDrag = null;
+  document.body.classList.remove('resizing');
+});
+split.addEventListener('dblclick', () => {
+  S.dockW = DOCK_DEFAULT;
+  applyDockWidth();
+  save();
+  applyCam();
+});
+window.addEventListener('resize', () => {
+  applyDockWidth();
+  applyCam();
+  if (use3d()) paint3d();
+});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(function () {});
 }
 
 initField();
+applyDockWidth();
 render();
 </script>
 </body>
