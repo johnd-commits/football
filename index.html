@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Playbook">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#101b23">
+<meta name="theme-color" content="#0a1628">
 <meta name="description" content="Learn football routes by tracing them with a finger.">
 <title>Playbook Trainer</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -16,9 +16,10 @@
 <style>
   :root{
     --turf:#2f6b46; --turf-dark:#27593b;
-    --chalk:#f1f4ee; --ink:#101b23; --ink-2:#182935; --ink-3:#25404f;
+    --chalk:#f1f4ee; --ink:#0a1628; --ink-2:#122038; --ink-3:#1c3150;
     --line:#365467; --muted:#93a9b7;
     --marker:#f2c230; --pass:#4fd189; --fail:#f2705e; --answer:#5fb0f0;
+    --navy:#0a1628; --gold:#f2c230;
     --dock-w:404px;
     --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
@@ -172,22 +173,50 @@
   @keyframes pulse{0%,100%{opacity:.2}50%{opacity:.95}}
   @media (prefers-reduced-motion:reduce){.pulse{animation:none;opacity:.65}}
   #gate{
-    position:fixed;inset:0;z-index:40;background:var(--ink);
-    padding:max(18px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom));
+    position:fixed;inset:0;z-index:40;background:var(--navy);
+    padding:max(14px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom));
     overflow-y:auto; -webkit-overflow-scrolling:touch;
   }
-  #gate h2{font-size:28px;margin:10px 0 6px}
-  #gate .lead{color:var(--muted);margin:0 0 18px;font-size:15.5px}
+  #gate.landing{
+    display:flex;flex-direction:column;align-items:center;
+    background:
+      radial-gradient(ellipse 80% 55% at 50% 28%, #163056 0%, var(--navy) 70%),
+      var(--navy);
+  }
+  #gate > .btn.ghost:first-child{align-self:flex-start;margin-bottom:4px}
+  #gate .hero{
+    display:block;width:min(100%, 380px);height:auto;margin:4px auto 10px;
+    filter:drop-shadow(0 10px 28px rgba(0,0,0,.45));
+  }
+  #gate .brand-strip{
+    display:block;width:min(100%, 340px);height:auto;margin:2px auto 12px;
+  }
+  #gate .panel{
+    width:min(100%, 440px);margin:0 auto;
+    background:rgba(10,22,40,.78);border:1px solid rgba(54,84,103,.85);
+    border-radius:14px;padding:14px 14px 16px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  #gate.landing .panel{margin-top:auto}
+  #gate h2{font-size:28px;margin:6px 0 6px}
+  #gate .lead{color:var(--muted);margin:0 0 14px;font-size:15.5px}
   #gate .posgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px}
   #gate .posgrid button{min-height:54px;width:100%}
   #gate .stack{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
   #gate .stack button{width:100%}
+  header .brand-mark{
+    display:none;height:36px;width:auto;max-width:min(42vw, 200px);
+    object-fit:contain;flex:none;position:relative;z-index:1;
+  }
+  body.brand-on header .brand-mark{display:block}
+  body.brand-on header .title{display:none}
   @media (max-width:520px){
     header .title{max-width:72px}
     header .title span{display:none}
     .tabs{gap:3px;padding:4px}
     .tabs button{padding:9px 12px;font-size:14px;min-width:0;min-height:42px}
     #back{min-width:52px;padding:0 8px}
+    body.brand-on header .brand-mark{height:30px;max-width:min(38vw, 150px)}
   }
   .you{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .you b{flex:1;min-width:0}
@@ -247,6 +276,7 @@
 <body>
 <header>
   <button id="back" class="btn ghost" type="button">Back</button>
+  <img class="brand-mark" src="brand/logo-horiz-sm.png" alt="Malden Catholic Lancers Football" width="199" height="96" decoding="async">
   <div class="title"><b id="ttl">Playbook Trainer</b><span id="sub">Load your plays, then run them with a finger.</span></div>
   <div class="tabs" role="tablist">
     <button role="tab" data-mode="practice">Practice</button>
@@ -1519,6 +1549,7 @@ function render() {
   dropPlayMenu();
   Object.keys(L).forEach(k => clr(L[k]));
   document.body.classList.toggle('play-on', !!(S.sess || S.fieldMax || S.snapping));
+  document.body.classList.toggle('brand-on', !S.pos || !!S.pickingPos || !!S.loadingPlays);
   document.querySelectorAll('.tabs button').forEach(b =>
     b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
   if (!S.pos || S.pickingPos) {
@@ -1574,12 +1605,34 @@ function showGate() {
   const g = $('#gate');
   clr(g);
   g.hidden = false;
-  g.append(overlayBack());
   const p0 = currentPos();
-  g.append(el('h2', { html: p0 ? 'Change player' : 'What position do you play?' }));
-  g.append(el('p', { class: 'lead', html: 'The app will only ask you to run <b>your</b> assignment on each play.' }));
+  const landing = !p0;
+  g.classList.toggle('landing', landing);
+  g.append(overlayBack());
+  if (landing) {
+    g.append(el('img', {
+      class: 'hero',
+      src: 'brand/logo-vert.png',
+      alt: 'Malden Catholic Lancers Football',
+      width: '708',
+      height: '842',
+      decoding: 'async'
+    }));
+  } else {
+    g.append(el('img', {
+      class: 'brand-strip',
+      src: 'brand/logo-horiz.png',
+      alt: 'Malden Catholic Lancers Football',
+      width: '456',
+      height: '220',
+      decoding: 'async'
+    }));
+  }
+  const panel = el('div', { class: 'panel' });
+  panel.append(el('h2', { html: landing ? 'What position do you play?' : 'Change player' }));
+  panel.append(el('p', { class: 'lead', html: 'The app will only ask you to run <b>your</b> assignment on each play.' }));
   ['Offense', 'Defense'].forEach(group => {
-    g.append(el('h3', { class: 'sec', html: group }));
+    panel.append(el('h3', { class: 'sec', html: group }));
     const grid = el('div', { class: 'posgrid' });
     POSITIONS.filter(p => p.group === group).forEach(p => {
       const b = el('button', { class: 'btn' + (p0 && p0.id === p.id ? ' go' : ''), 'aria-pressed': String(!!p0 && p0.id === p.id) });
@@ -1587,18 +1640,20 @@ function showGate() {
       b.onclick = () => setPos(p.id);
       grid.append(b);
     });
-    g.append(grid);
+    panel.append(grid);
   });
   if (p0) {
     const cancel = el('button', { class: 'btn ghost' });
     cancel.textContent = 'Keep ' + p0.name.toLowerCase();
     cancel.onclick = () => { S.pickingPos = false; render(); };
-    g.append(el('div', { class: 'bar' }, [cancel]));
+    panel.append(el('div', { class: 'bar' }, [cancel]));
   }
+  g.append(panel);
 }
 function hideGate() {
   const g = $('#gate');
   g.hidden = true;
+  g.classList.remove('landing');
   clr(g);
 }
 function loadPlaysBtn(kind) {
@@ -1624,21 +1679,31 @@ function showLoad() {
   const g = $('#gate');
   clr(g);
   g.hidden = false;
+  g.classList.remove('landing');
   g.append(overlayBack());
-  g.append(el('h2', { html: 'Load plays' }));
-  g.append(el('p', { class: 'lead', html: 'Load your team’s playbook, or bring in your own file.' }));
+  g.append(el('img', {
+    class: 'brand-strip',
+    src: 'brand/logo-horiz.png',
+    alt: 'Malden Catholic Lancers Football',
+    width: '456',
+    height: '220',
+    decoding: 'async'
+  }));
+  const panel = el('div', { class: 'panel' });
+  panel.append(el('h2', { html: 'Load plays' }));
+  panel.append(el('p', { class: 'lead', html: 'Load your team’s playbook, or bring in your own file.' }));
 
-  g.append(el('h3', { class: 'sec', html: 'Team playbooks' }));
+  panel.append(el('h3', { class: 'sec', html: 'Team playbooks' }));
   const stack = el('div', { class: 'stack' });
   const has = S.plays.some(p => p.folder === FOLDER_MC);
   const mc = el('button', { class: 'btn go' });
   mc.textContent = has ? 'Reload Malden Catholic Defense' : 'Malden Catholic Defense';
   mc.onclick = loadTeamMC;
   stack.append(mc);
-  g.append(stack);
-  g.append(el('p', { class: 'hint', html: '19 calls from the 4-2-5 Hudl playbook.' }));
+  panel.append(stack);
+  panel.append(el('p', { class: 'hint', html: '19 calls from the 4-2-5 Hudl playbook.' }));
 
-  g.append(el('h3', { class: 'sec', html: 'Your files' }));
+  panel.append(el('h3', { class: 'sec', html: 'Your files' }));
   const files = el('div', { class: 'stack' });
   const open = el('button', { class: 'btn' });
   open.textContent = 'Open a playbook file';
@@ -1650,12 +1715,13 @@ function showLoad() {
   typed.textContent = 'Type plays in';
   typed.onclick = () => { S.loadingPlays = false; S.mode = 'plays'; S.pane = 'type'; render(); };
   files.append(open, pics, typed);
-  g.append(files);
+  panel.append(files);
 
   const cancel = el('button', { class: 'btn ghost' });
   cancel.textContent = 'Cancel';
   cancel.onclick = () => { S.loadingPlays = false; render(); };
-  g.append(el('div', { class: 'bar' }, [cancel]));
+  panel.append(el('div', { class: 'bar' }, [cancel]));
+  g.append(panel);
 }
 function loadTeamMC() {
   const kept = S.plays.filter(p => p.folder !== FOLDER_MC);

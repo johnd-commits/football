@@ -1,4 +1,4 @@
-const CACHE = 'playbook-trainer-v20';
+const CACHE = 'playbook-trainer-v21';
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,9 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  './brand/logo-vert.png',
+  './brand/logo-horiz.png',
+  './brand/logo-horiz-sm.png',
   './sprites/blue-front.png',
   './sprites/blue-back.png',
   './sprites/white-front.png',
