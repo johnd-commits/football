@@ -1,4 +1,4 @@
-const CACHE = 'hardworkiq-v2';
+const CACHE = 'hardworkiq-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const ASSETS = [
   './js/quotes.js',
   './js/profanity.js',
   './js/account.js',
+  './js/features.js',
   './icons/hardworkiq.png',
   './icons/icon-192.png',
   './icons/icon-512.png',

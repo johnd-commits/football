@@ -48,10 +48,39 @@
     flex:none;margin-left:auto;min-width:0;
   }
   .tabs button{
-    border:0;background:none;color:var(--muted);font:inherit;font-weight:750;font-size:16px;
-    padding:10px 18px;border-radius:10px;cursor:pointer;min-height:44px;min-width:0;
+    border:0;background:none;color:var(--muted);font:inherit;font-weight:750;font-size:14px;
+    padding:10px 12px;border-radius:10px;cursor:pointer;min-height:44px;min-width:0;
   }
   .tabs button[aria-selected="true"]{background:var(--marker);color:#2a2109}
+  .streak{
+    flex:none;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+    background:var(--ink-2);border:1px solid var(--line);border-radius:10px;
+    padding:5px 10px;color:var(--chalk);cursor:pointer;min-height:44px;
+  }
+  .streak[hidden]{display:none !important}
+  .streak b{font-size:13px;color:var(--marker)}
+  .streak span{font-size:10px;color:var(--muted);font-weight:700}
+  .study-tools{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;align-items:center}
+  .study-tools input[type=search]{
+    flex:1 1 140px;min-width:120px;margin:0;padding:10px 12px;border-radius:9px;
+    background:var(--ink);border:1px solid var(--line);color:var(--chalk);font:inherit;
+  }
+  .nav-plays{display:flex;gap:6px;margin:0 0 8px}
+  .nav-plays .btn{flex:1}
+  .kbd-hint{font-size:11px;color:var(--muted);margin:4px 0 0}
+  .quiz-card{
+    background:var(--ink);border:1px solid var(--line);border-radius:12px;padding:14px;margin:8px 0;
+  }
+  .quiz-card .opts{display:grid;gap:8px;margin-top:10px}
+  #field-badge{
+    position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:5;
+    background:rgba(16,27,35,.88);border:1px solid var(--line);color:var(--chalk);
+    font-size:12px;font-weight:800;padding:6px 10px;border-radius:999px;pointer-events:none;
+    display:none;white-space:nowrap;
+  }
+  #field-badge.on{display:block}
+  .side-toggle{display:flex;gap:6px;margin:0 0 8px}
+  .side-toggle .chip{flex:1;text-align:center}
 
   #fieldwrap{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;touch-action:none}
   svg#field{width:100%;height:100%;touch-action:none;display:block}
@@ -335,6 +364,10 @@
     }
     body.resizing, body.resizing *{cursor:col-resize !important;user-select:none}
     #dock{width:var(--dock-w);flex:none;max-height:none;overflow-y:auto;border-top:0;border-left:1px solid var(--line);padding-top:14px;min-width:0}
+    body.mode-study #dock, body.mode-progress #dock, body.mode-coach #dock{padding-top:12px}
+    body.mode-study #dock .study-tools{margin-bottom:10px}
+    body.mode-study #fieldwrap{padding-left:4px}
+    .tabs button{font-size:13px;padding:10px 10px;min-width:0}
     #dock.slim{max-height:none;overflow-y:auto;padding-top:14px}
     #dock .dock-more, #dock.expanded .dock-more{display:block}
     .dock-handle{display:none}
@@ -363,8 +396,13 @@
     <button role="tab" data-mode="practice">Practice</button>
     <button role="tab" data-mode="study">Study</button>
     <button role="tab" data-mode="plays">Plays</button>
+    <button role="tab" data-mode="progress">Stats</button>
+    <button role="tab" data-mode="coach">Coach</button>
   </div>
   <div class="account-wrap" id="account-wrap" hidden>
+    <button id="streak" class="streak" type="button" title="Daily practice streak" hidden>
+      <b id="streak-n">0</b><span>day streak</span>
+    </button>
     <button id="account" class="account" type="button" title="Open leaderboard">
       <b id="who">—</b>
       <span id="pts">0 pts</span>
@@ -382,6 +420,7 @@
     <button id="zoom-out" class="btn" type="button">Zoom out</button>
   </div>
   <div id="viewmode" hidden></div>
+  <div id="field-badge"></div>
 </div>
 <button id="split" type="button" aria-label="Resize the side panel" title="Drag to make the panel wider or narrower"></button>
 <div id="dock"></div>
@@ -393,6 +432,7 @@
 <script src="js/quotes.js"></script>
 <script src="js/profanity.js"></script>
 <script src="js/account.js"></script>
+<script src="js/features.js"></script>
 <script>
 /* =====================================================================
    HARDWORKIQ
@@ -648,6 +688,11 @@ function updateAccountChip() {
   wrap.hidden = false;
   $('#who').textContent = Account.me.user.username;
   $('#pts').textContent = (Account.me.user.points || 0).toLocaleString() + ' pts';
+  const st = $('#streak');
+  if (st) {
+    st.hidden = false;
+    $('#streak-n').textContent = String(S.dayStreak || 0);
+  }
 }
 async function award(type, payload) {
   try {
@@ -734,8 +779,10 @@ function resetEye() {
 }
 function goBack() {
   if (S.boardOpen) { dropBoard(); return; }
+  if (S.quiz) { S.quiz = null; render(); return; }
   if (S.loadingPlays) { S.loadingPlays = false; render(); return; }
   if (S.playMenu) { S.playMenu = false; render(); return; }
+  if (S.pickingSkill) { S.pickingSkill = false; S.pickingPos = true; render(); return; }
   if (S.pickingPos && S.pos) { S.pickingPos = false; render(); return; }
   if (anim) { cancelAnimationFrame(anim); anim = null; }
   if (S.snapping || S.fieldMax) {
@@ -792,7 +839,8 @@ function paintViewMode() {
   const box = $('#viewmode');
   if (!box) return;
   clr(box);
-  const show = !!S.pos && !S.pickingPos && !S.loadingPlays && S.mode !== 'plays' && !S.sess;
+  const show = !!S.pos && !S.pickingPos && !S.loadingPlays && !S.pickingSkill
+    && (S.mode === 'practice' || S.mode === 'study') && !S.sess;
   box.hidden = !show;
   if (!show) return;
   viewChips(box);
@@ -1228,7 +1276,16 @@ function boot() {
     dockOpen: false, fieldMax: false, loadingPlays: false, bookFilter: 'all',
     view3d: !!(saved && saved.view3d), snapT: 0, snapping: false,
     playSpeed: clampSpeed(saved && saved.playSpeed),
-    dockW: saved && saved.dockW, playMenu: false, boardOpen: false }, base);
+    dockW: saved && saved.dockW, playMenu: false, boardOpen: false,
+    favorites: (saved && saved.favorites) || {},
+    notes: (saved && saved.notes) || {},
+    skill: (saved && saved.skill) || null,
+    dayStreak: (saved && saved.dayStreak) || 0,
+    lastDay: (saved && saved.lastDay) || '',
+    studyQ: '', studyConcept: 'all', studySit: 'all', studyFavOnly: false,
+    hideScout: false, stepMode: false, stepT: 0, ballOn: 'mid',
+    weekPack: (saved && saved.weekPack) || [],
+    quiz: null, pickingSkill: false }, base);
 }
 function folderOf(p) { return (p && p.folder) || 'My plays'; }
 function playFolders() {
@@ -1241,8 +1298,12 @@ function ensureTeamPacks(plays) {
 }
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(
-      { plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos, view3d: !!S.view3d, dockW: S.dockW, playSpeed: playSpeed() }));
+    localStorage.setItem(KEY, JSON.stringify({
+      plays: S.plays, currentId: S.currentId, stats: S.stats, tol: S.tol, pos: S.pos,
+      view3d: !!S.view3d, dockW: S.dockW, playSpeed: playSpeed(),
+      favorites: S.favorites || {}, notes: S.notes || {}, skill: S.skill,
+      dayStreak: S.dayStreak || 0, lastDay: S.lastDay || '', weekPack: S.weekPack || []
+    }));
     S.saveErr = '';
   } catch (e) {
     S.saveErr = 'This browser is out of room. Remove a play picture or two — once a play is traced the picture is just a reference.';
@@ -1743,6 +1804,10 @@ function fitPhoto(play, iw, ih) {
 function render() {
   dropPlayMenu();
   Object.keys(L).forEach(k => clr(L[k]));
+  document.body.className = document.body.className
+    .replace(/\bmode-\w+/g, '')
+    .replace(/\s+/g, ' ').trim();
+  document.body.classList.add('mode-' + (S.mode || 'practice'));
   document.body.classList.toggle('play-on', !!(S.sess || S.fieldMax || S.snapping));
   document.body.classList.toggle('brand-on', !S.pos || !!S.pickingPos || !!S.loadingPlays);
   document.querySelectorAll('.tabs button').forEach(b =>
@@ -1761,23 +1826,31 @@ function render() {
       paintViewMode();
       return;
     }
+  } else if (S.pickingSkill || !S.skill) {
+    showSkillGate();
+    clr($('#dock'));
+    applyView(); applyCam(); paint3d(); updateHud(); paintViewMode();
+    return;
   } else if (S.loadingPlays) {
     showLoad();
   } else {
     hideGate();
   }
-  ({ practice: rPractice, study: rStudy, plays: rPlays })[S.mode]();
+  const modes = { practice: rPractice, study: rStudy, plays: rPlays, progress: rProgress, coach: rCoach };
+  (modes[S.mode] || rPractice)();
   applyView();
   applyCam();
   paint3d();
   updateHud();
   paintViewMode();
-        if (S.playMenu) mountPlayMenu();
+  updateFieldBadge();
+  if (S.playMenu) mountPlayMenu();
   updateAccountChip();
 }
 function head(a, b) { $('#ttl').textContent = a; $('#sub').textContent = b; }
 function paint(play, showRoutes) {
   play.players.forEach(p => {
+    if (S.hideScout && p.scout) return;
     const mine = isMyPlayer(p);
     if (showRoutes && p.route) line(L.trail, p.route, {
       color: '#f2c230', arrow: 'm-live',
@@ -1786,12 +1859,77 @@ function paint(play, showRoutes) {
     if (showRoutes && p.block) blockMark(L.trail, p);
   });
   play.players.forEach(p => {
+    if (S.hideScout && p.scout) return;
     const mine = isMyPlayer(p);
     token(L.token, p, {
       ring: mine ? '#f2c230' : null,
       op: p.scout ? 0.4 : (!S.pos || mine ? 1 : 0.4)
     });
   });
+}
+function updateFieldBadge() {
+  const b = $('#field-badge');
+  if (!b) return;
+  const ball = (window.HWIQ.BALL || []).find(x => x.id === S.ballOn);
+  const play = cur();
+  const form = play && window.HWIQ.formationOf(play);
+  const bits = [];
+  if (ball) bits.push('Ball on ' + ball.label);
+  if (form) bits.push(form);
+  if (S.mode === 'study' && bits.length) {
+    b.textContent = bits.join(' · ');
+    b.classList.add('on');
+  } else {
+    b.classList.remove('on');
+    b.textContent = '';
+  }
+}
+function studyList() {
+  const pos = currentPos();
+  let list = S.plays.slice();
+  const side = S.sideFilter || (pos ? pos.side : 'both');
+  if (side === 'off' || side === 'def')
+    list = list.filter(p => sideOf(p) === side);
+  if (S.bookFilter && S.bookFilter !== 'all')
+    list = list.filter(p => folderOf(p) === S.bookFilter);
+  if (S.studyConcept && S.studyConcept !== 'all')
+    list = list.filter(p => window.HWIQ.conceptOf(p) === S.studyConcept);
+  if (S.studySit && S.studySit !== 'all')
+    list = list.filter(p => window.HWIQ.situationsOf(p).indexOf(S.studySit) >= 0);
+  if (S.studyFavOnly)
+    list = list.filter(p => !!(S.favorites || {})[p.id]);
+  if (S.studyQ)
+    list = list.filter(p => window.HWIQ.matchesSearch(p, S.studyQ));
+  return list;
+}
+function stepPlay(dir) {
+  const list = studyList();
+  if (!list.length) return;
+  let i = list.findIndex(p => p.id === S.currentId);
+  if (i < 0) i = 0;
+  const next = list[(i + dir + list.length) % list.length];
+  S.currentId = next.id;
+  S.snapT = 0; S.stepT = 0;
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
+  save();
+  render();
+  if (S.mode === 'study') award('study_view', { playId: next.id, playName: next.name });
+}
+function toggleFav(id) {
+  S.favorites = S.favorites || {};
+  if (S.favorites[id]) delete S.favorites[id];
+  else S.favorites[id] = true;
+  save(); render();
+}
+function setBallOn(id) {
+  S.ballOn = id;
+  const ball = (window.HWIQ.BALL || []).find(x => x.id === id);
+  if (ball) {
+    const y = LOS - (ball.yards - 50) * YARD * 0.35;
+    focusOn(W / 2, clamp(y, 80, H - 80), cam.z > 1.2 ? cam.z : 1.6);
+  }
+  updateFieldBadge();
+  render();
 }
 function overlayBack() {
   const b = el('button', { class: 'btn ghost', type: 'button' });
@@ -2086,6 +2224,8 @@ function startSession() {
     log: [], hint: 0, usedHint: false, result: null, trail: null,
     active: null, flash: false, showAnswer: false };
   S.dockOpen = false;
+  window.HWIQ.bumpDayStreak(S);
+  save();
   loadTasks();
   render();
 }
@@ -2305,22 +2445,71 @@ function rStudy() {
   d.classList.remove('slim', 'expanded');
   const pos = currentPos();
   const play = cur();
+  const form = play ? window.HWIQ.formationOf(play) : '';
   head(play ? play.name : 'Study', play
-    ? ((pos ? pos.name + ' · ' : '') + (play.notes || play.type))
+    ? [form, pos ? pos.name : '', play.type].filter(Boolean).join(' · ')
     : 'Nothing loaded');
   if (!play) { d.append(el('p', { class: 'hint', html: 'Add a play first.' })); return; }
 
   if (!use3d()) dockHandle(d);
   youBar(d);
-  if (use3d()) return;
+  if (use3d()) { updateFieldBadge(); return; }
   if (play.img && S.peek) drawPhoto(play);
-  paint(play, true);
+  paint(play, !S.stepMode || S.stepT > 0);
+  if (S.stepMode && S.stepT > 0) paintStep(play, S.stepT);
+  updateFieldBadge();
+
+  const sideRow = el('div', { class: 'side-toggle' });
+  [['off', 'Offense'], ['def', 'Defense'], ['both', 'Both']].forEach(o => {
+    const on = (S.sideFilter || 'both') === o[0];
+    const c = el('button', { class: 'chip', 'aria-pressed': String(on) });
+    c.textContent = o[1];
+    c.onclick = () => {
+      S.sideFilter = o[0];
+      const hit = studyList()[0];
+      if (hit) S.currentId = hit.id;
+      render();
+    };
+    sideRow.append(c);
+  });
+  d.append(sideRow);
+
+  const tools = el('div', { class: 'study-tools' });
+  const search = el('input', {
+    type: 'search', placeholder: 'Search plays…', value: S.studyQ || '',
+    id: 'study-search'
+  });
+  search.oninput = () => {
+    S.studyQ = search.value;
+    const keep = search.selectionStart;
+    render();
+    const inp = $('#study-search');
+    if (inp) {
+      inp.focus();
+      try { inp.setSelectionRange(keep, keep); } catch (e) {}
+    }
+  };
+  tools.append(search);
+  const fav = el('button', { class: 'btn', type: 'button', 'aria-pressed': String(!!(S.favorites || {})[play.id]) });
+  fav.textContent = (S.favorites || {})[play.id] ? '★ Favorited' : '☆ Favorite';
+  fav.onclick = () => toggleFav(play.id);
+  tools.append(fav);
+  d.append(tools);
+
+  const nav = el('div', { class: 'nav-plays' });
+  const prev = el('button', { class: 'btn', type: 'button' }); prev.textContent = '← Prev';
+  prev.onclick = () => stepPlay(-1);
+  const next = el('button', { class: 'btn', type: 'button' }); next.textContent = 'Next →';
+  next.onclick = () => stepPlay(1);
+  nav.append(prev, next);
+  d.append(nav);
 
   const bar = el('div', { class: 'bar' });
   const run = el('button', { class: 'btn go' });
-  run.textContent = S.view3d ? 'Snap the ball' : 'Run the play';
+  run.textContent = S.view3d ? 'Snap the ball' : (S.stepMode ? 'Play from step' : 'Run the play');
   run.onclick = () => {
-    S.fieldMax = true; S.dockOpen = false; S.snapT = 0; render(); animate(play);
+    S.fieldMax = true; S.dockOpen = false; S.snapT = S.stepMode ? S.stepT : 0; render();
+    animate(play, S.stepMode ? S.stepT : 0);
     award('study_run', { playId: play.id, playName: play.name });
   };
   const flip = el('button', { class: 'btn' }); flip.textContent = 'Flip sides';
@@ -2328,23 +2517,100 @@ function rStudy() {
   bar.append(run, flip);
   d.append(bar);
 
+  const speed = el('div', { class: 'chips' });
+  [0.5, 1, 2, 3].forEach(v => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(playSpeed() === v) });
+    c.textContent = (v === 0.5 ? '.5' : v) + 'x';
+    c.onclick = () => { S.playSpeed = v; save(); render(); };
+    speed.append(c);
+  });
+  d.append(speed);
+
+  const stepRow = el('div', { class: 'bar' });
+  const stepBtn = el('button', { class: 'btn', 'aria-pressed': String(!!S.stepMode) });
+  stepBtn.textContent = S.stepMode ? 'Step mode on' : 'Step-through';
+  stepBtn.onclick = () => { S.stepMode = !S.stepMode; S.stepT = 0; render(); };
+  const backStep = el('button', { class: 'btn ghost' }); backStep.textContent = '− Step';
+  backStep.disabled = !S.stepMode;
+  backStep.onclick = () => { S.stepT = clamp(S.stepT - 0.1, 0, 1); render(); };
+  const fwdStep = el('button', { class: 'btn ghost' }); fwdStep.textContent = '+ Step';
+  fwdStep.disabled = !S.stepMode;
+  fwdStep.onclick = () => { S.stepT = clamp(S.stepT + 0.1, 0, 1); render(); };
+  stepRow.append(stepBtn, backStep, fwdStep);
+  d.append(stepRow);
+
   const more = moreBox();
   const hint = viewHint();
   if (hint) more.append(hint);
+
+  const scoutBtn = el('button', { class: 'btn', 'aria-pressed': String(!!S.hideScout) });
+  scoutBtn.textContent = S.hideScout ? 'Show opponent' : 'Hide opponent';
+  scoutBtn.onclick = () => { S.hideScout = !S.hideScout; render(); };
+  more.append(el('div', { class: 'bar' }, [scoutBtn]));
+
+  more.append(el('h3', { class: 'sec', html: 'Ball on' }));
+  const ballChips = el('div', { class: 'chips' });
+  (window.HWIQ.BALL || []).forEach(b => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.ballOn === b.id) });
+    c.textContent = b.label;
+    c.onclick = () => setBallOn(b.id);
+    ballChips.append(c);
+  });
+  more.append(ballChips);
+
+  more.append(el('h3', { class: 'sec', html: 'Situation' }));
+  const sitChips = el('div', { class: 'chips' });
+  (window.HWIQ.SITS || []).forEach(s => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.studySit === s.id) });
+    c.textContent = s.label;
+    c.onclick = () => { S.studySit = s.id; render(); };
+    sitChips.append(c);
+  });
+  more.append(sitChips);
+
+  more.append(el('h3', { class: 'sec', html: 'Concept' }));
+  const concepts = ['all'].concat(Array.from(new Set(S.plays.map(p => window.HWIQ.conceptOf(p)))));
+  const conChips = el('div', { class: 'chips' });
+  concepts.forEach(name => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.studyConcept === name) });
+    c.textContent = name === 'all' ? 'All concepts' : name;
+    c.onclick = () => { S.studyConcept = name; render(); };
+    conChips.append(c);
+  });
+  more.append(conChips);
+
   folderChips(more);
-  const studyPlays = (pos ? S.plays.filter(p => sideOf(p) === pos.side) : S.plays)
-    .filter(p => !S.bookFilter || S.bookFilter === 'all' || folderOf(p) === S.bookFilter);
+  const onlyFav = el('button', { class: 'chip', 'aria-pressed': String(!!S.studyFavOnly) });
+  onlyFav.textContent = 'Favorites only';
+  onlyFav.onclick = () => { S.studyFavOnly = !S.studyFavOnly; render(); };
+  more.append(el('div', { class: 'chips' }, [onlyFav]));
+
+  const studyPlays = studyList();
+  more.append(el('h3', { class: 'sec', html: studyPlays.length + ' plays' }));
   const chips = el('div', { class: 'chips' });
   studyPlays.forEach(p => {
     const c = el('button', { class: 'chip', 'aria-pressed': String(p.id === S.currentId) });
-    c.textContent = p.name;
+    c.textContent = ((S.favorites || {})[p.id] ? '★ ' : '') + p.name;
     c.onclick = () => {
-      S.currentId = p.id; S.snapT = 0; save(); render();
+      S.currentId = p.id; S.snapT = 0; S.stepT = 0; save(); render();
       award('study_view', { playId: p.id, playName: p.name });
     };
     chips.append(c);
   });
   more.append(chips);
+
+  const rel = window.HWIQ.related(S.plays, play, 4);
+  if (rel.length) {
+    more.append(el('h3', { class: 'sec', html: 'Related' }));
+    const rc = el('div', { class: 'chips' });
+    rel.forEach(p => {
+      const c = el('button', { class: 'chip' });
+      c.textContent = p.name;
+      c.onclick = () => { S.currentId = p.id; S.stepT = 0; save(); render(); };
+      rc.append(c);
+    });
+    more.append(rc);
+  }
 
   const jobs = myJobs(play);
   if (pos) {
@@ -2352,6 +2618,17 @@ function rStudy() {
       ? 'Your assignment' + (jobs.length === 1 ? '' : 's') + ': <b>' + jobs.map(p => p.label).join(', ') + '</b>.'
       : 'You do not have an assignment on this play. Pick another, or change player.' }));
   }
+  if (form) more.append(el('p', { class: 'hint', html: 'Formation: <b>' + form + '</b> · Concept: <b>' + window.HWIQ.conceptOf(play) + '</b>.' }));
+
+  more.append(el('h3', { class: 'sec', html: 'Your notes' }));
+  const ta = el('textarea', { placeholder: 'Notes for this play…' });
+  ta.value = (S.notes && S.notes[play.id]) || '';
+  ta.onchange = () => {
+    S.notes = S.notes || {};
+    S.notes[play.id] = ta.value.trim();
+    save();
+  };
+  more.append(ta);
 
   if (play.img) {
     const pk = el('button', { class: 'btn', 'aria-pressed': String(!!S.peek) });
@@ -2360,22 +2637,65 @@ function rStudy() {
     more.append(el('div', { class: 'bar' }, [pk]));
   }
 
+  const quizGo = el('button', { class: 'btn go' });
+  quizGo.textContent = 'Quiz this play';
+  quizGo.onclick = () => startQuiz(play);
+  more.append(el('div', { class: 'bar' }, [quizGo]));
+
   const st = S.stats[play.id];
   more.append(el('p', { class: 'hint', html: st
     ? 'Practised ' + st.reps + ' time' + (st.reps === 1 ? '' : 's') + '. ' +
       (st.learned ? 'Marked learned.' : 'Clean streak ' + (st.streak || 0) + ' of 3.')
     : 'Not practised yet.' }));
   if (play.notes) more.append(el('p', { class: 'hint', html: play.notes }));
+  more.append(el('p', { class: 'kbd-hint', html: 'Shortcuts: / search · N next · P prev · Space run · F favorite · S step · O opponent · 1–4 speed' }));
   d.append(more);
 }
 
-function animate(play) {
+function paintStep(play, t) {
+  const movers = play.players.filter(p => jobOf(p) && !(S.hideScout && p.scout))
+    .map(p => ({ p: p, pts: resample(jobOf(p), 70) }));
+  clr(L.trail); clr(L.token);
+  play.players.forEach(p => {
+    if (S.hideScout && p.scout) return;
+    if (p.block) blockMark(L.trail, p);
+  });
+  movers.forEach(m => {
+    const n = Math.max(2, Math.round(t * (m.pts.length - 1)) + 1);
+    const mine = isMyPlayer(m.p);
+    line(L.trail, m.pts.slice(0, n), {
+      color: '#f2c230', arrow: t >= 1 ? 'm-live' : null,
+      op: !S.pos || mine ? 1 : 0.25, w: mine ? 6 : 4
+    });
+  });
+  play.players.forEach(p => {
+    if (S.hideScout && p.scout) return;
+    const m = movers.find(q => q.p.id === p.id);
+    const at = m ? m.pts[Math.round(t * (m.pts.length - 1))] : p;
+    token(L.token, Object.assign({}, p, { x: at.x, y: at.y }), {
+      ring: isMyPlayer(p) ? '#f2c230' : null,
+      op: p.scout ? 0.4 : (!S.pos || isMyPlayer(p) ? 1 : 0.4)
+    });
+  });
+}
+
+function startQuiz(play) {
+  const q = window.HWIQ.quizFor(play, currentPos());
+  S.quiz = { playId: play.id, q: q, answered: null };
+  S.mode = 'progress';
+  render();
+}
+
+function animate(play, fromT) {
   if (anim) cancelAnimationFrame(anim);
-  const movers = play.players.filter(p => jobOf(p)).map(p => ({ p: p, pts: resample(jobOf(p), 70) }));
+  const start = clamp(fromT || 0, 0, 0.95);
+  const movers = play.players.filter(p => jobOf(p) && !(S.hideScout && p.scout))
+    .map(p => ({ p: p, pts: resample(jobOf(p), 70) }));
   const t0 = performance.now();
-  const dur = snapDur();
+  const dur = snapDur() * (1 - start);
   const step = now => {
-    const t = clamp((now - t0) / dur, 0, 1);
+    const u = clamp((now - t0) / dur, 0, 1);
+    const t = start + (1 - start) * u;
     S.snapT = t;
     if (use3d()) {
       draw3d(play, t);
@@ -2392,7 +2712,10 @@ function animate(play) {
       return;
     }
     clr(L.trail); clr(L.token);
-    play.players.forEach(p => { if (p.block) blockMark(L.trail, p); });
+    play.players.forEach(p => {
+      if (S.hideScout && p.scout) return;
+      if (p.block) blockMark(L.trail, p);
+    });
     movers.forEach(m => {
       const n = Math.max(2, Math.round(t * (m.pts.length - 1)) + 1);
       const mine = isMyPlayer(m.p);
@@ -2402,6 +2725,7 @@ function animate(play) {
       });
     });
     play.players.forEach(p => {
+      if (S.hideScout && p.scout) return;
       const m = movers.find(q => q.p.id === p.id);
       const at = m ? m.pts[Math.round(t * (m.pts.length - 1))] : p;
       token(L.token, Object.assign({}, p, { x: at.x, y: at.y }), {
@@ -2419,6 +2743,235 @@ function flipPlay(play) {
     p.x = W - p.x;
     if (p.route) p.route = p.route.map(q => ({ x: W - q.x, y: q.y }));
   });
+}
+
+function showSkillGate() {
+  const g = $('#gate');
+  clr(g);
+  g.hidden = false;
+  g.classList.remove('landing');
+  const back = overlayBack();
+  back.onclick = () => { S.pickingPos = true; render(); };
+  g.append(back);
+  g.append(el('h2', { html: 'What level are you?' }));
+  g.append(el('p', { class: 'lead', html: 'This sets how tight practice grading starts. Change it anytime in Stats.' }));
+  (window.HWIQ.SKILLS || []).forEach(sk => {
+    const b = el('button', { class: 'btn' + (S.skill === sk.id ? ' go' : '') });
+    b.textContent = sk.label + ' — ' + sk.hint;
+    b.onclick = () => {
+      S.skill = sk.id;
+      S.tol = sk.tol;
+      S.pickingSkill = false;
+      save(); render();
+    };
+    g.append(b);
+  });
+}
+
+function rProgress() {
+  const d = $('#dock'); clr(d);
+  d.classList.remove('slim', 'expanded');
+  head('Your progress', (Account.me.user && Account.me.user.username) || 'HardWorkIQ');
+  youBar(d);
+
+  if (S.quiz && S.quiz.q) {
+    const card = el('div', { class: 'quiz-card' });
+    card.append(el('h3', { class: 'sec', html: 'Quick quiz' }));
+    card.append(el('p', { html: S.quiz.q.prompt }));
+    const opts = el('div', { class: 'opts' });
+    S.quiz.q.options.forEach(opt => {
+      const b = el('button', { class: 'btn' });
+      b.textContent = opt;
+      b.onclick = () => {
+        const ok = opt === S.quiz.q.correct;
+        S.quiz.answered = opt;
+        if (ok) {
+          window.HWIQ.bumpDayStreak(S);
+          updateAccountChip();
+          award('study_run', {
+            playId: S.quiz.playId,
+            playName: (S.plays.find(p => p.id === S.quiz.playId) || {}).name || 'Quiz'
+          });
+        } else {
+          toast({ points: 0, reason: 'Missed — try another' });
+        }
+        save(); render();
+      };
+      if (S.quiz.answered) {
+        b.disabled = true;
+        if (opt === S.quiz.q.correct) b.classList.add('go');
+      }
+      opts.append(b);
+    });
+    card.append(opts);
+    if (S.quiz.answered) {
+      card.append(el('p', { class: 'hint', html: S.quiz.answered === S.quiz.q.correct
+        ? 'Nice — ' + S.quiz.q.correct + ' is right.'
+        : 'Answer was <b>' + S.quiz.q.correct + '</b>. ' + (S.quiz.q.hint || '') }));
+      const again = el('button', { class: 'btn' });
+      again.textContent = 'Another play quiz';
+      again.onclick = () => {
+        const pool = studyList().length ? studyList() : S.plays;
+        const p = pool[Math.floor(Math.random() * pool.length)];
+        if (p) startQuiz(p);
+      };
+      card.append(el('div', { class: 'bar' }, [again]));
+    }
+    d.append(card);
+  }
+
+  const u = Account.me.user || {};
+  d.append(el('div', { class: 'banner' }, [
+    el('span', { class: 'verdict help', html: (u.points || 0) + ' pts' }),
+    el('div', { class: 'why', html: 'Best clean streak <b>' + (u.bestStreak || 0) + '</b><small>Day streak ' + (S.dayStreak || 0) + ' · Studied ' + (u.studied || 0) + ' · Sessions ' + (u.sessions || 0) + '</small>' })
+  ]));
+
+  d.append(el('h3', { class: 'sec', html: 'Skill level' }));
+  const sk = el('div', { class: 'chips' });
+  (window.HWIQ.SKILLS || []).forEach(s => {
+    const c = el('button', { class: 'chip', 'aria-pressed': String(S.skill === s.id) });
+    c.textContent = s.label;
+    c.onclick = () => { S.skill = s.id; S.tol = s.tol; save(); render(); };
+    sk.append(c);
+  });
+  d.append(sk);
+
+  const quizBtn = el('button', { class: 'btn go' });
+  quizBtn.textContent = 'Start a quiz';
+  quizBtn.onclick = () => {
+    const pool = studyList().length ? studyList() : S.plays;
+    const p = pool[Math.floor(Math.random() * pool.length)] || cur();
+    if (p) startQuiz(p);
+  };
+  d.append(el('div', { class: 'bar' }, [quizBtn]));
+
+  const learned = S.plays.filter(p => (S.stats[p.id] || {}).learned);
+  const weak = S.plays.filter(p => {
+    const st = S.stats[p.id];
+    return st && st.reps && !st.learned;
+  });
+  const favs = S.plays.filter(p => (S.favorites || {})[p.id]);
+
+  d.append(el('h3', { class: 'sec', html: 'Mastered (' + learned.length + ')' }));
+  if (!learned.length) d.append(el('p', { class: 'hint', html: 'Clean a play 3 times in a row with no hints.' }));
+  else {
+    const ul = el('ul', { class: 'list' });
+    learned.forEach(p => ul.append(el('li', {}, [
+      el('span', { class: 'nm', html: p.name }),
+      el('span', { class: 'pill on', html: 'Learned' })
+    ])));
+    d.append(ul);
+  }
+
+  d.append(el('h3', { class: 'sec', html: 'Needs work (' + weak.length + ')' }));
+  if (weak.length) {
+    const ul = el('ul', { class: 'list' });
+    weak.slice(0, 12).forEach(p => {
+      const st = S.stats[p.id];
+      const li = el('li', {}, [
+        el('span', { class: 'nm', html: p.name }),
+        el('span', { class: 'pill', html: 'streak ' + (st.streak || 0) })
+      ]);
+      li.onclick = () => { S.currentId = p.id; S.mode = 'study'; render(); };
+      ul.append(li);
+    });
+    d.append(ul);
+  }
+
+  d.append(el('h3', { class: 'sec', html: 'Favorites (' + favs.length + ')' }));
+  if (favs.length) {
+    const ul = el('ul', { class: 'list' });
+    favs.forEach(p => {
+      const li = el('li', {}, [el('span', { class: 'nm', html: '★ ' + p.name })]);
+      li.onclick = () => { S.currentId = p.id; S.mode = 'study'; render(); };
+      ul.append(li);
+    });
+    d.append(ul);
+  }
+
+  const board = el('button', { class: 'btn' });
+  board.textContent = 'Open leaderboard';
+  board.onclick = () => mountBoard();
+  d.append(el('div', { class: 'bar' }, [board]));
+}
+
+function rCoach() {
+  const d = $('#dock'); clr(d);
+  d.classList.remove('slim', 'expanded');
+  head('Coach tools', 'This week’s install');
+  youBar(d);
+  d.append(el('p', { class: 'hint', html: 'Build a week pack and export it for the room. Online team rollups use the leaderboard.' }));
+
+  S.weekPack = S.weekPack || [];
+  d.append(el('h3', { class: 'sec', html: 'This week’s install (' + S.weekPack.length + ')' }));
+  const packUl = el('ul', { class: 'list' });
+  S.weekPack.forEach(id => {
+    const p = S.plays.find(x => x.id === id);
+    if (!p) return;
+    const li = el('li', {}, [
+      el('span', { class: 'nm', html: p.name }),
+      el('span', { class: 'pill', html: window.HWIQ.conceptOf(p) })
+    ]);
+    li.onclick = () => {
+      S.weekPack = S.weekPack.filter(x => x !== id);
+      save(); render();
+    };
+    packUl.append(li);
+  });
+  if (!S.weekPack.length) packUl.append(el('li', {}, [el('span', { class: 'nm', html: 'Tap plays below to add them.' })]));
+  d.append(packUl);
+
+  d.append(el('h3', { class: 'sec', html: 'Add from playbook' }));
+  const search = el('input', { type: 'search', placeholder: 'Filter plays…' });
+  let q = '';
+  const listWrap = el('div');
+  const drawList = () => {
+    clr(listWrap);
+    const ul = el('ul', { class: 'list' });
+    S.plays.filter(p => window.HWIQ.matchesSearch(p, q)).slice(0, 40).forEach(p => {
+      const on = S.weekPack.indexOf(p.id) >= 0;
+      const li = el('li', {}, [
+        el('span', { class: 'box' + (on ? ' on' : ''), html: on ? '&check;' : '' }),
+        el('span', { class: 'nm', html: p.name }),
+        el('span', { class: 'pill', html: sideOf(p) === 'def' ? 'D' : 'O' })
+      ]);
+      li.onclick = () => {
+        if (on) S.weekPack = S.weekPack.filter(id => id !== p.id);
+        else S.weekPack = S.weekPack.concat(p.id);
+        save(); render();
+      };
+      ul.append(li);
+    });
+    listWrap.append(ul);
+  };
+  search.oninput = () => { q = search.value; drawList(); };
+  d.append(search);
+  d.append(listWrap);
+  drawList();
+
+  const bar = el('div', { class: 'bar' });
+  const exp = el('button', { class: 'btn go' });
+  exp.textContent = 'Export week pack';
+  exp.onclick = () => {
+    const plays = S.plays.filter(p => S.weekPack.indexOf(p.id) >= 0);
+    const blob = new Blob([JSON.stringify({ name: 'HardWorkIQ week pack', plays: plays }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: 'hardworkiq-week.json' });
+    document.body.append(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+  const clear = el('button', { class: 'btn ghost' });
+  clear.textContent = 'Clear pack';
+  clear.onclick = () => { S.weekPack = []; save(); render(); };
+  bar.append(exp, clear);
+  d.append(bar);
+
+  const practiced = S.plays.filter(p => (S.stats[p.id] || {}).reps).length;
+  d.append(el('p', { class: 'hint', html: practiced + ' of ' + S.plays.length + ' plays have reps on this device.' }));
+  const lb = el('button', { class: 'btn' });
+  lb.textContent = 'Leaderboard';
+  lb.onclick = () => mountBoard();
+  d.append(el('div', { class: 'bar' }, [lb]));
 }
 
 /* ============ typing routes in shorthand: "Z slant", "X out 12" ============ */
@@ -3117,6 +3670,10 @@ document.querySelectorAll('.tabs button').forEach(b => {
     const next = b.getAttribute('data-mode');
     S.mode = next;
     S.sel = null; S.armed = null; S.loadMsg = '';
+    if (next !== 'progress') S.quiz = null;
+    if (next === 'study' && window.innerWidth >= 900 && (S.dockW || 0) < 440) {
+      S.dockW = 440; applyDockWidth(); save();
+    }
     render();
     const play = cur();
     if (next === 'study' && play) award('study_view', { playId: play.id, playName: play.name });
@@ -3125,6 +3682,7 @@ document.querySelectorAll('.tabs button').forEach(b => {
 $('#back').onclick = goBack;
 $('#account').onclick = () => { mountBoard(); };
 $('#signout').onclick = () => { Account.logout(); };
+$('#streak').onclick = () => { S.mode = 'progress'; render(); };
 $('#recenter').onclick = () => {
   resetEye();
   if (!anim) S.snapT = 0;
@@ -3148,6 +3706,34 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     goBack();
     S.sel = null; S.armed = null; act = null; clr(L.live);
+    return;
+  }
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === '/' && S.mode === 'study') {
+    e.preventDefault();
+    const inp = $('#study-search') || $('#dock input[type=search]');
+    if (inp) inp.focus();
+    return;
+  }
+  if (S.mode !== 'study' && S.mode !== 'practice') return;
+  if (e.key === 'n' || e.key === 'N') { stepPlay(1); return; }
+  if (e.key === 'p' || e.key === 'P') { stepPlay(-1); return; }
+  if (e.key === 'f' || e.key === 'F') { const pl = cur(); if (pl) toggleFav(pl.id); return; }
+  if (e.key === 'o' || e.key === 'O') { S.hideScout = !S.hideScout; render(); return; }
+  if (e.key === 's' || e.key === 'S') { S.stepMode = !S.stepMode; S.stepT = 0; render(); return; }
+  if (e.key === ' ' && S.mode === 'study') {
+    e.preventDefault();
+    const play = cur();
+    if (!play) return;
+    S.fieldMax = true; S.dockOpen = false; render();
+    animate(play, S.stepMode ? S.stepT : 0);
+    award('study_run', { playId: play.id, playName: play.name });
+    return;
+  }
+  if (e.key >= '1' && e.key <= '4') {
+    S.playSpeed = [0.5, 1, 2, 3][Number(e.key) - 1];
+    save(); if (S.mode === 'study') render(); else updateHud();
   }
 });
 document.addEventListener('gesturestart', e => e.preventDefault());
