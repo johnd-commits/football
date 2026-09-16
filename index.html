@@ -244,7 +244,7 @@
     header .title{grid-area:title;max-width:none}
     header .title b{font-size:17px}
     header .title span{display:none}
-    .account{grid-area:account}
+    .account-wrap{grid-area:account}
     header .brand-mark{grid-area:title;height:30px;max-width:min(38vw, 150px)}
     #zoom .btn{min-width:72px;min-height:40px;font-size:12px;padding:0 8px}
   }
@@ -255,6 +255,16 @@
   }
   .account b{font-size:13px;max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .account span{font-size:11px;color:var(--marker);font-weight:800}
+  .account-wrap{display:flex;align-items:center;gap:6px;flex:none;margin-left:8px}
+  .account-wrap[hidden]{display:none !important}
+  #signout{
+    flex:none;min-width:0;min-height:44px;padding:0 12px;font-size:13px;font-weight:750;
+  }
+  @media (max-width:899px){
+    .account-wrap{grid-area:account;margin-left:0}
+    .account{margin-left:0}
+    #signout{padding:0 10px;font-size:12px;min-height:40px}
+  }
   #toast{
     position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(16px);
     background:var(--marker);color:#2a2109;font-weight:800;padding:10px 16px;
@@ -354,10 +364,13 @@
     <button role="tab" data-mode="study">Study</button>
     <button role="tab" data-mode="plays">Plays</button>
   </div>
-  <button id="account" class="account" type="button" hidden>
-    <b id="who">—</b>
-    <span id="pts">0 pts</span>
-  </button>
+  <div class="account-wrap" id="account-wrap" hidden>
+    <button id="account" class="account" type="button" title="Open leaderboard">
+      <b id="who">—</b>
+      <span id="pts">0 pts</span>
+    </button>
+    <button id="signout" class="btn ghost" type="button">Sign out</button>
+  </div>
 </header>
 <div id="fieldwrap">
   <svg id="field" viewBox="0 0 900 1100" aria-label="Football field"></svg>
@@ -629,9 +642,10 @@ function toast(data) {
   toast._t = setTimeout(() => n.classList.remove('show'), 2600);
 }
 function updateAccountChip() {
+  const wrap = $('#account-wrap');
   const b = $('#account');
-  if (!b || !Account.me.user) return;
-  b.hidden = false;
+  if (!wrap || !b || !Account.me.user) return;
+  wrap.hidden = false;
   $('#who').textContent = Account.me.user.username;
   $('#pts').textContent = (Account.me.user.points || 0).toLocaleString() + ' pts';
 }
@@ -3110,6 +3124,7 @@ document.querySelectorAll('.tabs button').forEach(b => {
 });
 $('#back').onclick = goBack;
 $('#account').onclick = () => { mountBoard(); };
+$('#signout').onclick = () => { Account.logout(); };
 $('#recenter').onclick = () => {
   resetEye();
   if (!anim) S.snapT = 0;

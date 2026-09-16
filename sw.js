@@ -1,4 +1,4 @@
-const CACHE = 'hardworkiq-v1';
+const CACHE = 'hardworkiq-v2';
 const ASSETS = [
   './',
   './index.html',
